@@ -1,0 +1,94 @@
+from rest_framework import serializers
+from .models import Post, PostLike, SavedPost, PostDailyLimit
+from businesses.serializers import BusinessListSerializer
+
+
+class PostCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Post
+        fields = [
+            'product_name', 'description', 'price', 'category',
+            'image_url', 'auto_share_instagram', 'auto_share_facebook'
+        ]
+
+    def validate(self, attrs):
+        request = self.context['request']
+        business = request.user.business
+
+        # Check daily post limit
+        if not business.is_within_post_limit():
+            raise serializers.ValidationError(
+                f"Daily post limit reached ({business.max_posts_per_day} posts per day)"
+            )
+
+        return attrs
+
+    def create(self, validated_data):
+        request = self.context['request']
+        business = request.user.business
+
+        # Auto-capitalize first letter of product name and description
+        validated_data['product_name'] = validated_data['product_name'].strip().capitalize()
+        validated_data['description'] = validated_data['description'].strip().capitalize()
+
+        post = Post.objects.create(business=business, **validated_data)
+
+        # Update daily limit counter
+        from django.utils import timezone
+        from django.db.models import F
+
+        today = timezone.now().date()
+        PostDailyLimit.objects.update_or_create(
+            business=business,
+            date=today,
+            defaults={'posts_count': F('posts_count') + 1}
+        )
+
+        return post
+
+
+class PostDetailSerializer(serializers.ModelSerializer):
+    business = BusinessListSerializer(read_only=True)
+    is_liked = serializers.SerializerMethodField()
+    is_saved = serializers.SerializerMethodField()
+    can_inquire = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Post
+        fields = [
+            'id', 'business', 'product_name', 'description', 'price', 'category',
+            'image_url', 'image_thumbnail', 'is_available',
+            'total_likes', 'total_inquiries', 'total_views', 'is_featured',
+            'created_at', 'updated_at', 'is_liked', 'is_saved', 'can_inquire'
+        ]
+
+    def get_is_liked(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return PostLike.objects.filter(post=obj, user=request.user).exists()
+        return False
+
+    def get_is_saved(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return SavedPost.objects.filter(post=obj, user=request.user).exists()
+        return False
+
+    def get_can_inquire(self, obj):
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+        # Users cannot inquire their own posts
+        return obj.business.user != request.user
+
+
+class PostListSerializer(serializers.ModelSerializer):
+    """Minimal post info for lists/feeds"""
+    business = BusinessListSerializer(read_only=True)
+
+    class Meta:
+        model = Post
+        fields = [
+            'id', 'business', 'product_name', 'price', 'category',
+            'image_thumbnail', 'total_likes', 'created_at', 'is_featured'
+        ]
