@@ -1,3 +1,4 @@
+# Dockerfile
 FROM python:3.11-slim
 
 ENV PYTHONUNBUFFERED=1
@@ -10,6 +11,7 @@ RUN apt-get update && apt-get install -y \
     postgresql-client \
     libpq-dev \
     gcc \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
@@ -22,9 +24,8 @@ COPY . /app/
 # Create logs directory
 RUN mkdir -p /app/logs
 
-# Collect static files
-RUN python manage.py collectstatic --noinput
-
+# Expose port for Gunicorn
 EXPOSE 8000
 
-CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3"]
+# CMD: migrate + collectstatic + start Gunicorn
+CMD ["sh", "-c", "python manage.py migrate --noinput && python manage.py collectstatic --noinput && gunicorn business_backend.wsgi:application --bind 0.0.0.0:8000 --workers 3 --access-logfile - --error-logfile -"]
