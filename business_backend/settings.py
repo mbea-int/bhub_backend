@@ -17,8 +17,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = config('SECRET_KEY')
 DEBUG = config('DEBUG', default=False, cast=bool)
 NGROK_DOMAIN = os.environ.get('NGROK_DOMAIN')
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default=f'localhost,127.0.0.1,10.218.234.148,10.213.7.148,{NGROK_DOMAIN},89197192a72f.ngrok-free.app').split(',')
-
+# ALLOWED_HOSTS = config('ALLOWED_HOSTS', default=f'localhost,127.0.0.1,10.218.234.148,10.213.7.148,10.90.56.45,{NGROK_DOMAIN},8f0196055533.ngrok-free.app').split(',')
+#ver ketu ngrok url dhe ne production ti fshijme. ngrok_url duhet poshte te cors headers
+NGROK_DOMAIN = '1240d2b10f77.ngrok-free.app'
+NGROK_URL = "https://1240d2b10f77.ngrok-free.app"
+ALLOWED_HOSTS = [NGROK_DOMAIN,'localhost','127.0.0.1','10.218.234.148','10.213.7.148','10.90.56.45','8f0196055533.ngrok-free.app']
 
 # Application definition
 
@@ -207,10 +210,10 @@ SIMPLE_JWT = {
 }
 
 # CORS Settings
-NGROK_URL = os.environ.get('NGROK_URL')
+
 CORS_ALLOWED_ORIGINS = config(
     'CORS_ALLOWED_ORIGINS',
-    default=f'http://localhost:8000,http://127.0.0.1:8000,http://10.218.234.148:8000,http://10.213.7.148:8000,{NGROK_URL}'
+    default=f'http://localhost:8000,http://10.90.56.45:8000,http://127.0.0.1:8000,http://10.218.234.148:8000,http://10.213.7.148:8000,{NGROK_URL}'
 ).split(',')
 
 CORS_ALLOW_CREDENTIALS = True
@@ -225,8 +228,8 @@ EMAIL_HOST_PASSWORD = config('SENDGRID_API_KEY')
 DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@muslimcommunity.al')
 
 # Celery Configuration (for background tasks)
-CELERY_BROKER_URL = config('REDIS_URL', default='redis://localhost:6379/0')
-CELERY_RESULT_BACKEND = config('REDIS_URL', default='redis://localhost:6379/0')
+CELERY_BROKER_URL = config('REDIS_URL', default='redis://redis:6379/0')
+CELERY_RESULT_BACKEND = config('REDIS_URL', default='redis://redis:6379/0')
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'

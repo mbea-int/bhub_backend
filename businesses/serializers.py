@@ -3,13 +3,18 @@ from .models import Business, Follower, Subscriber, BusinessAnalytics, BusinessC
 from users.serializers import UserListSerializer
 
 
-class BusinessCategorySerializer(serializers.ModelSerializer):
-    total_businesses = serializers.IntegerField(read_only=True)
+# class BusinessCategorySerializer(serializers.ModelSerializer):
+#     total_businesses = serializers.IntegerField(read_only=True)
+#
+#     class Meta:
+#         model = BusinessCategory
+#         fields = ['id', 'name', 'slug', 'icon', 'description', 'total_businesses']
 
+class BusinessCategorySerializer(serializers.ModelSerializer):
     class Meta:
         model = BusinessCategory
-        fields = ['id', 'name', 'slug', 'icon', 'description', 'total_businesses']
-
+        fields = ['id', 'name', 'slug', 'icon', 'description', 'is_active']
+        read_only_fields = ['id', 'slug']
 
 class BusinessCreateSerializer(serializers.ModelSerializer):
     class Meta:
@@ -37,6 +42,8 @@ class BusinessCreateSerializer(serializers.ModelSerializer):
 class BusinessDetailSerializer(serializers.ModelSerializer):
     owner = UserListSerializer(source='user', read_only=True)
     category = BusinessCategorySerializer(read_only=True)
+    verification_status = serializers.CharField(read_only=True, default='pending')
+    logo = serializers.CharField(required=False, allow_null=True)
     is_following = serializers.SerializerMethodField()
     is_subscribed = serializers.SerializerMethodField()
     distance_km = serializers.SerializerMethodField()

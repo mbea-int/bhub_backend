@@ -111,9 +111,6 @@ class User(AbstractUser):
             if not User.objects.filter(referral_code=code).exists():
                 return code
 
-    @property
-    def is_business_owner(self):
-        return self.user_type == 'business'
 
 
 class BlockedUser(models.Model):

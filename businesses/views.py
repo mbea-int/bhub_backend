@@ -126,7 +126,7 @@ class BusinessViewSet(viewsets.ModelViewSet):
     def my_business(self, request):
         """Get current user's business"""
         try:
-            business = request.user.business
+            business = request.user.primary_business
             serializer = self.get_serializer(business)
             return Response(serializer.data)
         except Business.DoesNotExist:

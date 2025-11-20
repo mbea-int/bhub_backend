@@ -22,11 +22,89 @@ class BusinessManager(models.Manager):
     def premium(self):
         return self.verified().filter(is_premium=True)
 
+
 class BusinessCategory(models.Model):
+    """
+    Zgjedhjet e ikonave të Material Icons për Flutter.
+    Çdo kategori mund të ketë ikonën e saj specifike.
+    """
+    ICON_CHOICES = [
+        # Food & Dining
+        ('restaurant_rounded', 'Restaurant'),
+        ('local_cafe_rounded', 'Cafe'),
+        ('bakery_dining_rounded', 'Bakery'),
+        ('local_pizza_rounded', 'Pizza'),
+        ('lunch_dining_rounded', 'Fast Food'),
+        ('ramen_dining_rounded', 'Ramen/Noodles'),
+
+        # Shopping & Retail
+        ('store_rounded', 'Store/Market'),
+        ('storefront_rounded', 'Shop/Butcher'),
+        ('checkroom_rounded', 'Clothing Store'),
+        ('shopping_bag_rounded', 'Shopping'),
+        ('shopping_cart_rounded', 'Supermarket'),
+
+        # Services
+        ('content_cut_rounded', 'Barbershop'),
+        ('face_rounded', 'Beauty/Salon'),
+        ('spa_rounded', 'Spa'),
+        ('cleaning_services_rounded', 'Cleaning'),
+        ('build_rounded', 'Construction/Repair'),
+        ('plumbing_rounded', 'Plumbing'),
+        ('electrical_services_rounded', 'Electrical'),
+
+        # Healthcare
+        ('local_hospital_rounded', 'Hospital/Clinic'),
+        ('local_pharmacy_rounded', 'Pharmacy'),
+        ('medical_services_rounded', 'Medical Services'),
+        ('dental_services_rounded', 'Dental'),
+        ('psychology_rounded', 'Psychology'),
+
+        # Education & Religion
+        ('school_rounded', 'School/Education'),
+        ('mosque_rounded', 'Mosque'),
+        ('menu_book_rounded', 'Library/Books'),
+        ('science_rounded', 'Science/Lab'),
+
+        # Travel & Hospitality
+        ('flight_rounded', 'Travel Agency'),
+        ('hotel_rounded', 'Hotel'),
+        ('apartment_rounded', 'Apartment/Real Estate'),
+        ('directions_car_rounded', 'Car Services'),
+        ('local_taxi_rounded', 'Taxi'),
+
+        # Fitness & Sports
+        ('fitness_center_rounded', 'Gym/Fitness'),
+        ('sports_soccer_rounded', 'Sports'),
+        ('pool_rounded', 'Swimming'),
+
+        # Technology & Electronics
+        ('computer_rounded', 'Computer/Tech'),
+        ('phone_android_rounded', 'Mobile/Electronics'),
+        ('camera_rounded', 'Photography'),
+
+        # Entertainment
+        ('movie_rounded', 'Cinema/Entertainment'),
+        ('theater_comedy_rounded', 'Theater'),
+        ('music_note_rounded', 'Music'),
+
+        # Default
+        ('business_rounded', 'Default Business'),
+        ('business_center_rounded', 'Business Center'),
+        ('store_mall_directory_rounded', 'Mall/Directory'),
+    ]
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=100, unique=True)
     slug = models.SlugField(max_length=100, unique=True)
-    icon = models.CharField(max_length=50, blank=True, null=True)  # For icon names/classes
+    icon = models.CharField(
+        max_length=50,
+        choices=ICON_CHOICES,
+        default='business_rounded',
+        blank=True,
+        null=True,
+        help_text='Material Icon name for Flutter app'
+    )
     description = models.TextField(blank=True, null=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -44,6 +122,9 @@ class BusinessCategory(models.Model):
     def save(self, *args, **kwargs):
         if not self.slug:
             self.slug = slugify(self.name)
+        # Nëse nuk ka icon, vendos default
+        if not self.icon:
+            self.icon = 'business_rounded'
         super().save(*args, **kwargs)
 
 class Business(models.Model):
