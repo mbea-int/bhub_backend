@@ -9,22 +9,32 @@ import cloudinary.api
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-
 # Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
-
-# SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = config('SECRET_KEY')
 DEBUG = config('DEBUG', default=False, cast=bool)
-NGROK_DOMAIN = os.environ.get('NGROK_DOMAIN')
-# ALLOWED_HOSTS = config('ALLOWED_HOSTS', default=f'localhost,127.0.0.1,10.218.234.148,10.213.7.148,10.90.56.45,{NGROK_DOMAIN},8f0196055533.ngrok-free.app').split(',')
-#ver ketu ngrok url dhe ne production ti fshijme. ngrok_url duhet poshte te cors headers
-NGROK_DOMAIN = '1240d2b10f77.ngrok-free.app'
-NGROK_URL = "https://1240d2b10f77.ngrok-free.app"
-ALLOWED_HOSTS = [NGROK_DOMAIN,'localhost','127.0.0.1','10.218.234.148','10.213.7.148','10.90.56.45','8f0196055533.ngrok-free.app']
+
+# Detect if running on PythonAnywhere
+ON_PYTHONANYWHERE = "PYTHONANYWHERE_SITE" in os.environ or "pythonanywhere.com" in os.environ.get("PYTHONANYWHERE_DOMAIN", "")
+
+# NGROK and ALLOWED_HOSTS Configuration
+if DEBUG and not ON_PYTHONANYWHERE:
+    NGROK_DOMAIN = '1240d2b10f77.ngrok-free.app'
+    NGROK_URL = "https://1240d2b10f77.ngrok-free.app"
+    ALLOWED_HOSTS = [
+        NGROK_DOMAIN,
+        'localhost',
+        '127.0.0.1',
+        '10.218.234.148',
+        '10.213.7.148',
+        '10.90.56.45',
+        '8f0196055533.ngrok-free.app'
+    ]
+else:
+    NGROK_URL = None
+    # For PythonAnywhere, add your username
+    ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1').split(',')
 
 # Application definition
-
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -38,7 +48,6 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'corsheaders',
     'django_filters',
-    'django_ratelimit',
     'cloudinary',
     'cloudinary_storage',
 
@@ -51,12 +60,11 @@ INSTALLED_APPS = [
     'notifications',
     'messaging',
     'reports',
-
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',  # Static files
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -86,19 +94,8 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'business_backend.wsgi.application'
 
-
 # Database
-# https://docs.djangoproject.com/en/5.2/ref/settings/#databases
-
 DATABASES = {
-    # 'default': {
-    #     'ENGINE': 'django.db.backends.postgresql',
-    #     'NAME': config('DB_NAME'),
-    #     'USER': config('DB_USER'),
-    #     'PASSWORD': config('DB_PASSWORD'),
-    #     'HOST': config('DB_HOST', default='localhost'),
-    #     'PORT': config('DB_PORT', default='5432'),
-    # }
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
@@ -109,8 +106,6 @@ DATABASES = {
 AUTH_USER_MODEL = 'users.User'
 
 # Password validation
-# https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
-
 AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
@@ -126,12 +121,8 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-
 # Internationalization
-# https://docs.djangoproject.com/en/5.2/topics/i18n/
-
-# Internationalization
-LANGUAGE_CODE = 'sq'  # Albanian
+LANGUAGE_CODE = 'sq'
 TIME_ZONE = 'Europe/Tirane'
 USE_I18N = True
 USE_L10N = True
@@ -142,29 +133,37 @@ LANGUAGES = [
     ('en', 'English'),
 ]
 
-
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/5.2/howto/static-files/
-
 # Static files
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-# STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
-STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
+STATICFILES_DIRS = [BASE_DIR / 'static'] if (BASE_DIR / 'static').exists() else []
 MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
-
-# Default primary key field type
-# https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
+MEDIA_ROOT = BASE_DIR / 'media'
 
 # Media files (using Cloudinary)
 DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
 
 # Cloudinary Configuration
+CLOUDINARY_CLOUD_NAME = config('CLOUDINARY_CLOUD_NAME')
+CLOUDINARY_API_KEY = config('CLOUDINARY_API_KEY')
+CLOUDINARY_API_SECRET = config('CLOUDINARY_API_SECRET')
+
 CLOUDINARY_STORAGE = {
-    'CLOUD_NAME': config('CLOUDINARY_CLOUD_NAME'),
-    'API_KEY': config('CLOUDINARY_API_KEY'),
-    'API_SECRET': config('CLOUDINARY_API_SECRET'),
+    'CLOUD_NAME': CLOUDINARY_CLOUD_NAME,
+    'API_KEY': CLOUDINARY_API_KEY,
+    'API_SECRET': CLOUDINARY_API_SECRET,
+}
+
+cloudinary.config(
+    cloud_name=CLOUDINARY_CLOUD_NAME,
+    api_key=CLOUDINARY_API_KEY,
+    api_secret=CLOUDINARY_API_SECRET,
+    secure=True
+)
+
+CLOUDINARY_DEFAULT_TRANSFORMATIONS = {
+    'quality': 'auto:eco',
+    'fetch_format': 'auto',
 }
 
 # REST Framework
@@ -210,12 +209,19 @@ SIMPLE_JWT = {
 }
 
 # CORS Settings
+if DEBUG and NGROK_URL:
+    cors_origins = [
+        'http://localhost:8000',
+        'http://127.0.0.1:8000',
+        'http://10.90.56.45:8000',
+        'http://10.218.234.148:8000',
+        'http://10.213.7.148:8000',
+        NGROK_URL
+    ]
+else:
+    cors_origins = config('CORS_ALLOWED_ORIGINS', default='http://localhost:8000').split(',')
 
-CORS_ALLOWED_ORIGINS = config(
-    'CORS_ALLOWED_ORIGINS',
-    default=f'http://localhost:8000,http://10.90.56.45:8000,http://127.0.0.1:8000,http://10.218.234.148:8000,http://10.213.7.148:8000,{NGROK_URL}'
-).split(',')
-
+CORS_ALLOWED_ORIGINS = cors_origins
 CORS_ALLOW_CREDENTIALS = True
 
 # Email Configuration (SendGrid)
@@ -224,49 +230,43 @@ EMAIL_HOST = 'smtp.sendgrid.net'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = 'apikey'
-EMAIL_HOST_PASSWORD = config('SENDGRID_API_KEY')
+EMAIL_HOST_PASSWORD = config('SENDGRID_API_KEY', default='')
 DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@muslimcommunity.al')
 
-# Celery Configuration (for background tasks)
-CELERY_BROKER_URL = config('REDIS_URL', default='redis://redis:6379/0')
-CELERY_RESULT_BACKEND = config('REDIS_URL', default='redis://redis:6379/0')
+# Celery Configuration - DISABLED for PythonAnywhere free account
+USE_CELERY = False
+CELERY_BROKER_URL = 'memory://'
+CELERY_RESULT_BACKEND = 'cache+memory://'
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
 
-# Caching
-CACHES = {
-    'default': {
-        'BACKEND': 'django_redis.cache.RedisCache',
-        'LOCATION': config('REDIS_URL', default='redis://localhost:6379/1'),
-        'OPTIONS': {
-            # 'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-        },
-        'KEY_PREFIX': 'muslim_community',
-        'TIMEOUT': 300,
+# Caching - Use file-based cache for PythonAnywhere
+if ON_PYTHONANYWHERE:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache',
+            'LOCATION': BASE_DIR / 'cache',
+        }
     }
-}
-#perkohesisht perdor me poshte
-# ama fillimisht runo kete komande docker run -p 6379:6379 redis
-# CACHES = {
-#     "default": {
-#         "BACKEND": "django_redis.cache.RedisCache",
-#         "LOCATION": "redis://127.0.0.1:6379/1",
-#         "OPTIONS": {
-#             "CLIENT_CLASS": "django_redis.client.DefaultClient",
-#         }
-#     }
-# }
+else:
+    # Local development - use locmem cache
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'unique-snowflake',
+        }
+    }
 
-
-
-
-# Rate Limiting
-RATELIMIT_ENABLE = True
-RATELIMIT_USE_CACHE = 'default'
+# Rate Limiting - Disabled for PythonAnywhere free account
+RATELIMIT_ENABLE = not ON_PYTHONANYWHERE
+RATELIMIT_USE_CACHE = 'default' if not ON_PYTHONANYWHERE else None
 
 # Logging
+log_dir = BASE_DIR / 'logs'
+log_dir.mkdir(exist_ok=True)
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -280,7 +280,7 @@ LOGGING = {
         'file': {
             'level': 'INFO',
             'class': 'logging.handlers.RotatingFileHandler',
-            'filename': BASE_DIR / 'logs/django.log',
+            'filename': log_dir / 'django.log',
             'maxBytes': 1024 * 1024 * 15,  # 15MB
             'backupCount': 10,
             'formatter': 'verbose',
@@ -293,12 +293,12 @@ LOGGING = {
     },
     'loggers': {
         'django': {
-            'handlers': ['file', 'console'],
+            'handlers': ['console'] if DEBUG else ['file'],
             'level': 'INFO',
             'propagate': True,
         },
         'apps': {
-            'handlers': ['file', 'console'],
+            'handlers': ['console'] if DEBUG else ['file'],
             'level': 'DEBUG',
             'propagate': True,
         },
@@ -318,9 +318,7 @@ if not DEBUG:
     SECURE_HSTS_PRELOAD = True
 
 # Content Moderation (Bad Words Filter)
-CONTENT_FILTER_WORDS = [
-    # Add inappropriate words here
-]
+CONTENT_FILTER_WORDS = []
 
 # Business Settings
 DEFAULT_MAX_POSTS_PER_DAY = 3
@@ -328,21 +326,3 @@ FREE_PREMIUM_SLOTS = 50
 PREMIUM_PRICE_MONTHLY = 500  # in Lekë
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-
-# Cloudinary Configuration
-CLOUDINARY_CLOUD_NAME = os.environ.get('CLOUDINARY_CLOUD_NAME')
-CLOUDINARY_API_KEY = os.environ.get('CLOUDINARY_API_KEY')
-CLOUDINARY_API_SECRET = os.environ.get('CLOUDINARY_API_SECRET')
-
-cloudinary.config(
-    cloud_name=CLOUDINARY_CLOUD_NAME,
-    api_key=CLOUDINARY_API_KEY,
-    api_secret=CLOUDINARY_API_SECRET,
-    secure=True
-)
-
-# Optional: Default transformation for images
-CLOUDINARY_DEFAULT_TRANSFORMATIONS = {
-    'quality': 'auto:eco',
-    'fetch_format': 'auto',
-}
