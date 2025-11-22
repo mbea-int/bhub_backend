@@ -96,7 +96,7 @@ class BusinessCategory(models.Model):
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=100, unique=True)
-    slug = models.SlugField(max_length=100, unique=True)
+    slug = models.SlugField(max_length=255, unique=True, blank=False, null=False)
     icon = models.CharField(
         max_length=50,
         choices=ICON_CHOICES,
@@ -150,8 +150,8 @@ class Business(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='businesses')
     business_name = models.CharField(max_length=255)
-    slug = models.SlugField(max_length=255, unique=True)
-    description = models.TextField()
+    slug = models.SlugField(max_length=255, unique=True, blank=True, null=True)  # Auto-generated
+    description = models.TextField(blank=True, null=True)  # Mund të shtohet më vonë
     category = models.ForeignKey(
         BusinessCategory,
         on_delete=models.PROTECT,
@@ -174,7 +174,12 @@ class Business(models.Model):
 
     is_verified = models.BooleanField(default=False)
     verification_documents = models.JSONField(blank=True, null=True)
-    verification_status = models.CharField(max_length=20, choices=VERIFICATION_STATUS_CHOICES, default='pending')
+    verification_status = models.CharField(
+        max_length=20,
+        choices=VERIFICATION_STATUS_CHOICES,
+        default='pending',
+        blank=True  # Lejon që të mos kërkohet
+    )
     verification_date = models.DateTimeField(blank=True, null=True)
 
     is_premium = models.BooleanField(default=False)
@@ -193,6 +198,7 @@ class Business(models.Model):
 
     social_instagram = models.CharField(max_length=255, blank=True, null=True)
     social_facebook = models.CharField(max_length=255, blank=True, null=True)
+    website = models.URLField(max_length=500, blank=True, null=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -216,21 +222,29 @@ class Business(models.Model):
         return self.business_name
 
     def save(self, *args, **kwargs):
-        if not self.slug:
-            self.slug = slugify(self.business_name)
-            # Ensure uniqueness
+        # ALWAYS generate slug
+        if not self.slug or self.slug.strip() == '':
+            base_slug = slugify(self.business_name)
+            if not base_slug:
+                base_slug = f"business-{uuid.uuid4().hex[:8]}"
+
+            self.slug = base_slug
             counter = 1
-            original_slug = self.slug
-            while Business.objects.filter(slug=self.slug).exists():
-                self.slug = f"{original_slug}-{counter}"
+            while Business.objects.filter(slug=self.slug).exclude(pk=self.pk).exists():
+                self.slug = f"{base_slug}-{counter}"
                 counter += 1
-        # Auto-set as primary if it's the user's first business
+
+        # Set as primary if first business
         if not self.pk and not self.user.businesses.exists():
             self.is_primary = True
 
-            # ✅ Ensure only one primary business per user
+        # Ensure only one primary per user
         if self.is_primary:
-            Business.objects.filter(user=self.user, is_primary=True).exclude(pk=self.pk).update(is_primary=False)
+            Business.objects.filter(
+                user=self.user,
+                is_primary=True
+            ).exclude(pk=self.pk).update(is_primary=False)
+
         super().save(*args, **kwargs)
 
     @property

@@ -61,6 +61,27 @@ class BusinessViewSet(viewsets.ModelViewSet):
             return [IsBusinessOwner()]
         return super().get_permissions()
 
+    def retrieve(self, request, *args, **kwargs):
+        """Override retrieve to handle slug or ID"""
+        try:
+            # Try to get by slug first
+            instance = self.get_object()
+        except Business.DoesNotExist:
+            # If slug fails, try ID
+            lookup = self.kwargs.get('slug')
+            try:
+                import uuid
+                uuid_obj = uuid.UUID(lookup)
+                instance = Business.objects.get(id=uuid_obj)
+            except (ValueError, Business.DoesNotExist):
+                return Response(
+                    {'detail': 'Business not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
+
     def create(self, request, *args, **kwargs):
         data = request.data.copy()
 

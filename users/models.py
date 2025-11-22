@@ -31,11 +31,30 @@ class UserManager(BaseUserManager):
 
         return self.create_user(email, full_name, password, **extra_fields)
 
+    def create_guest_user(self):
+        """Create a temporary guest user"""
+        import secrets
+        guest_email = f"guest_{secrets.token_hex(8)}@temp.local"
+        guest = self.model(
+            email=guest_email,
+            full_name="Guest user",
+            user_type="guest",
+            is_active=True,
+            is_guest=True
+        )
+        guest.set_unusable_password()
+        # Set guest flag if field exists
+        if hasattr(guest, 'is_guest'):
+            guest.is_guest = True
+        guest.save(using=self._db)
+        return guest
+
 
 class User(AbstractUser):
     USER_TYPE_CHOICES = [
         ('regular', 'Regular User'),
         ('business', 'Business Owner'),
+        ('guest', 'Guest'),
     ]
 
     LANGUAGE_CHOICES = [
@@ -56,6 +75,9 @@ class User(AbstractUser):
     bio = models.TextField(blank=True, null=True)
     profile_image = models.URLField(max_length=500, blank=True, null=True)
     user_type = models.CharField(max_length=20, choices=USER_TYPE_CHOICES, default='regular')
+
+    is_guest = models.BooleanField(default=False)
+    guest_expires_at = models.DateTimeField(blank=True, null=True)
 
     is_email_verified = models.BooleanField(default=False)
     email_verification_token = models.CharField(max_length=100, blank=True, null=True)
@@ -110,6 +132,18 @@ class User(AbstractUser):
             code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
             if not User.objects.filter(referral_code=code).exists():
                 return code
+
+    # Metodë për guest cleanup:
+    @classmethod
+    def cleanup_expired_guests(cls):
+        from django.utils import timezone
+        expired = cls.objects.filter(
+            is_guest=True,
+            guest_expires_at__lt=timezone.now()
+        )
+        count = expired.count()
+        expired.delete()
+        return count
 
 
 

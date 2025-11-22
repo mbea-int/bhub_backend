@@ -42,28 +42,49 @@ class BusinessCreateSerializer(serializers.ModelSerializer):
 class BusinessDetailSerializer(serializers.ModelSerializer):
     owner = UserListSerializer(source='user', read_only=True)
     category = BusinessCategorySerializer(read_only=True)
+
+    # Bëj këto eksplicit nullable
+    slug = serializers.SlugField(read_only=True)  # Auto-generated
+    description = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     verification_status = serializers.CharField(read_only=True, default='pending')
-    logo = serializers.CharField(required=False, allow_null=True)
+    logo = serializers.URLField(required=False, allow_null=True, allow_blank=True)
+    website = serializers.URLField(required=False, allow_null=True, allow_blank=True)
+
+    # Computed fields
     is_following = serializers.SerializerMethodField()
     is_subscribed = serializers.SerializerMethodField()
-    distance_km = serializers.SerializerMethodField()
     is_mine = serializers.SerializerMethodField()
+    distance_km = serializers.SerializerMethodField()
 
     class Meta:
         model = Business
         fields = [
             'id', 'owner', 'business_name', 'slug', 'description', 'category',
-            'logo', 'phone', 'email', 'address', 'city', 'country',
+            'logo', 'website', 'phone', 'email', 'address', 'city', 'country',
             'latitude', 'longitude', 'business_hours', 'is_open_now',
             'is_verified', 'verification_status', 'is_premium', 'is_primary',
             'total_followers', 'total_subscribers', 'average_rating', 'total_reviews',
             'is_halal_certified', 'social_instagram', 'social_facebook',
-            'created_at', 'is_following', 'is_subscribed', 'distance_km', 'is_mine'
+            'created_at', 'is_following', 'is_subscribed', 'is_mine', 'distance_km'
         ]
         read_only_fields = [
-            'id', 'slug', 'is_verified', 'verification_status', 'is_premium',
-            'total_followers', 'total_subscribers', 'average_rating', 'total_reviews', 'created_at'
+            'id', 'slug', 'owner', 'is_verified', 'verification_status',
+            'is_premium', 'total_followers', 'total_subscribers',
+            'average_rating', 'total_reviews', 'created_at'
         ]
+
+    def to_representation(self, instance):
+        """Ensure all fields have safe defaults"""
+        data = super().to_representation(instance)
+
+        # Ensure these fields are never None in response
+        if not data.get('slug'):
+            data['slug'] = str(instance.id)
+
+        data['description'] = data.get('description') or ''
+        data['verification_status'] = data.get('verification_status') or 'pending'
+
+        return data
 
     def get_is_following(self, obj):
         request = self.context.get('request')

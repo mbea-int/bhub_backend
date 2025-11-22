@@ -27,12 +27,13 @@ if DEBUG and not ON_PYTHONANYWHERE:
         '10.218.234.148',
         '10.213.7.148',
         '10.90.56.45',
-        '8f0196055533.ngrok-free.app'
+        'a58e005e63e6.ngrok-free.app',
+        'nyja.pythonanywhere.com'
     ]
 else:
     NGROK_URL = None
     # For PythonAnywhere, add your username
-    ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1').split(',')
+    ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,a58e005e63e6.ngrok-free.app').split(',')
 
 # Application definition
 INSTALLED_APPS = [
@@ -216,12 +217,16 @@ if DEBUG and NGROK_URL:
         'http://10.90.56.45:8000',
         'http://10.218.234.148:8000',
         'http://10.213.7.148:8000',
+        'https://nyja.pythonanywhere.com',
+        'https://a58e005e63e6.ngrok-free.app',
         NGROK_URL
     ]
 else:
-    cors_origins = config('CORS_ALLOWED_ORIGINS', default='http://localhost:8000').split(',')
+    cors_origins = config('CORS_ALLOWED_ORIGINS', default='http://localhost:8000,https://a58e005e63e6.ngrok-free.app').split(',')
 
-CORS_ALLOWED_ORIGINS = cors_origins
+# CORS_ALLOWED_ORIGINS = cors_origins
+CORS_ALLOW_ALL_ORIGINS = True
+X_FRAME_OPTIONS = 'SAMEORIGIN'
 CORS_ALLOW_CREDENTIALS = True
 
 # Email Configuration (SendGrid)

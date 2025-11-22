@@ -14,6 +14,18 @@ class Message(models.Model):
     read_at = models.DateTimeField(blank=True, null=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
+    attachment = models.FileField(upload_to='message_attachments/', blank=True, null=True)
+    attachment_type = models.CharField(max_length=20, blank=True, choices=[
+        ('image', 'Image'),
+        ('file', 'File'),
+        ('audio', 'Audio'),
+    ])
+    is_deleted = models.BooleanField(default=False)
+    deleted_at = models.DateTimeField(blank=True, null=True)
+
+    # For business inquiries
+    related_business = models.ForeignKey('businesses.Business', on_delete=models.SET_NULL, null=True, blank=True)
+    related_post = models.ForeignKey('posts.Post', on_delete=models.SET_NULL, null=True, blank=True)
 
     class Meta:
         db_table = 'messages'

@@ -29,3 +29,19 @@ class IsOwnerOrReadOnly(permissions.BasePermission):
         if request.method in permissions.SAFE_METHODS:
             return True
         return obj.user == request.user
+
+
+class GuestReadOnly(permissions.BasePermission):
+    """Allow guests to read only"""
+
+    def has_permission(self, request, view):
+        # Guests can only GET
+        if request.user.is_authenticated and hasattr(request.user, 'is_guest'):
+            return request.method in permissions.SAFE_METHODS
+        return True
+
+    def has_object_permission(self, request, view, obj):
+        if request.user.is_authenticated and hasattr(request.user, 'is_guest'):
+            return request.method in permissions.SAFE_METHODS
+        return True
+

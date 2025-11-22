@@ -102,3 +102,31 @@ class MessageViewSet(viewsets.ModelViewSet):
         """Get total unread message count"""
         count = Message.objects.filter(receiver=request.user, is_read=False).count()
         return Response({'unread_count': count})
+
+    @action(detail=False, methods=['post'])
+    def mark_all_read(self, request):
+        """Mark all messages in a conversation as read"""
+        conversation_id = request.data.get('conversation_id')
+        if not conversation_id:
+            return Response({'detail': 'conversation_id required'}, status=400)
+
+        Message.objects.filter(
+            conversation_id=conversation_id,
+            receiver=request.user,
+            is_read=False
+        ).update(is_read=True, read_at=timezone.now())
+
+        return Response({'status': 'success'})
+
+    @action(detail=True, methods=['delete'])
+    def soft_delete(self, request, pk=None):
+        """Soft delete a message"""
+        message = self.get_object()
+        if message.sender != request.user:
+            return Response({'detail': 'Not allowed'}, status=403)
+
+        message.is_deleted = True
+        message.deleted_at = timezone.now()
+        message.save()
+
+        return Response({'status': 'deleted'})

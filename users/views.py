@@ -28,8 +28,11 @@ class UserViewSet(viewsets.ModelViewSet):
         return UserProfileSerializer
 
     def get_permissions(self):
-        if self.action == 'create':
+        public_actions = ['create', 'guest_login']
+
+        if self.action in public_actions:
             return [permissions.AllowAny()]
+
         return [permissions.IsAuthenticated()]
 
     @method_decorator(ratelimit(key='ip', rate='5/15m', method='POST'))
@@ -262,3 +265,56 @@ class UserViewSet(viewsets.ModelViewSet):
                 crop='fill'
             )
         })
+
+    @action(detail=False, methods=['post'], url_path='guest-login', permission_classes=[permissions.AllowAny])
+    def guest_login(self, request):
+        """Create guest access"""
+        from datetime import timedelta
+        from django.utils import timezone
+        import secrets
+
+        try:
+            # Check if create_guest_user exists in UserManager
+            if hasattr(User.objects, 'create_guest_user'):
+                guest_user = User.objects.create_guest_user()
+            else:
+                # Fallback - create manually
+                guest_email = f"guest_{secrets.token_hex(8)}@temp.local"
+                guest_user = User(
+                    email=guest_email,
+                    full_name="Vizitor",
+                    user_type='regular',  # ose 'guest' nëse e ke
+                    is_active=True,
+                )
+                # Set guest flag if field exists
+                if hasattr(guest_user, 'is_guest'):
+                    guest_user.is_guest = True
+
+                guest_user.set_unusable_password()
+                guest_user.save()
+
+            # Set expiration if field exists
+            if hasattr(guest_user, 'guest_expires_at'):
+                guest_user.guest_expires_at = timezone.now() + timedelta(days=7)
+                guest_user.save()
+
+            # Generate token
+            refresh = RefreshToken.for_user(guest_user)
+
+            return Response({
+                'user': UserProfileSerializer(guest_user).data,
+                'tokens': {
+                    'refresh': str(refresh),
+                    'access': str(refresh.access_token),
+                },
+                'is_guest': True,
+                'expires_at': guest_user.guest_expires_at.isoformat() if hasattr(guest_user,
+                                                                                 'guest_expires_at') else None
+            }, status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+            logger.error(f"Guest login error: {str(e)}")
+            return Response(
+                {'error': 'Failed to create guest session', 'detail': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
