@@ -162,19 +162,88 @@ class UserViewSet(viewsets.ModelViewSet):
         # Use the update_profile method with only image data
         return self.update_profile(request)
 
-    @action(detail=False, methods=['post'])
+    # @action(detail=False, methods=['post'])
+    # def upgrade_to_business(self, request):
+    #     """Upgrade regular user to business owner"""
+    #     user = request.user
+    #     if user.user_type == 'business':
+    #         return Response(
+    #             {'detail': 'Already a business owner'},
+    #             status=status.HTTP_400_BAD_REQUEST
+    #         )
+    #
+    #     user.user_type = 'business'
+    #     user.save()
+    #     return Response({'detail': 'Successfully upgraded to business owner'})
+
+    @action(detail=False, methods=['post'], permission_classes=[permissions.IsAuthenticated])
     def upgrade_to_business(self, request):
-        """Upgrade regular user to business owner"""
+        """Upgrade user to business owner"""
         user = request.user
+
+        # Validations
         if user.user_type == 'business':
             return Response(
                 {'detail': 'Already a business owner'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        if user.user_type == 'guest':
+            return Response(
+                {'detail': 'Guest users cannot become business owners'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Upgrade user
         user.user_type = 'business'
         user.save()
-        return Response({'detail': 'Successfully upgraded to business owner'})
+
+        # Return updated user data
+        user_serializer = UserProfileSerializer(user)
+
+        logger.info(f"User {user.email} upgraded to business owner")
+
+        return Response({
+            'detail': 'Successfully upgraded to business owner',
+            'user': user_serializer.data
+        }, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['post'], permission_classes=[permissions.IsAuthenticated])
+    def downgrade_to_regular(self, request):
+        """Downgrade from business owner to regular user"""
+        user = request.user
+
+        if user.user_type != 'business':
+            return Response(
+                {'detail': 'User is not a business owner'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Check if user has active businesses
+        active_businesses = user.businesses.count()
+        if active_businesses > 0:
+            return Response(
+                {
+                    'detail': 'Cannot downgrade while you have active businesses',
+                    'active_businesses': active_businesses,
+                    'message': 'Please delete all businesses before downgrading'
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Downgrade user
+        user.user_type = 'regular'
+        user.save()
+
+        # Return updated user data
+        user_serializer = UserProfileSerializer(user)
+
+        logger.info(f"User {user.email} downgraded to regular user")
+
+        return Response({
+            'detail': 'Successfully downgraded to regular user',
+            'user': user_serializer.data
+        }, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=['post'])
     def block(self, request, pk=None):

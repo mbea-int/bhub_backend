@@ -331,3 +331,10 @@ FREE_PREMIUM_SLOTS = 50
 PREMIUM_PRICE_MONTHLY = 500  # in Lekë
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+cloudinary.config(
+    cloud_name="YOUR_CLOUD_NAME",
+    api_key="YOUR_API_KEY",
+    api_secret="YOUR_API_SECRET",
+    secure=True
+)

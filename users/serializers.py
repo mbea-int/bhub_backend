@@ -78,6 +78,27 @@ class UserProfileSerializer(serializers.ModelSerializer):
         return obj.referrals.count()
 
 
+# class UserUpgradeSerializer(serializers.Serializer):
+#     """Serializer for upgrading user to business owner"""
+#     pass  # No input fields needed, just validates the action
+#
+#     def validate(self, attrs):
+#         user = self.context['request'].user
+#
+#         if user.user_type == 'business':
+#             raise serializers.ValidationError("User is already a business owner")
+#
+#         if user.user_type == 'guest':
+#             raise serializers.ValidationError("Guest users cannot become business owners")
+#
+#         return attrs
+#
+#     def save(self):
+#         user = self.context['request'].user
+#         user.user_type = 'business'
+#         user.save()
+#         return user
+
 class UserUpdateSerializer(serializers.ModelSerializer):
     profile_image = CloudinaryImageField(required=False, allow_null=True)
     class Meta:

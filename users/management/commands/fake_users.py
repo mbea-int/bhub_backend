@@ -8,8 +8,8 @@ fake_users = [
         "is_superuser": True
     },
     {
-        "email": "ardian.hoxha@gmail.com",
-        "full_name": "Ardian Hoxha",
+        "email": "ardiana.hoxha@gmail.com",
+        "full_name": "Ardiana Hoxha",
         "password": "test123",
         "user_type": "business",
         "phone": "+355694444555"
@@ -22,8 +22,8 @@ fake_users = [
         "phone": "+355695555666"
     },
     {
-        "email": "besmir.krasniqi@gmail.com",
-        "full_name": "Besmir Krasniqi",
+        "email": "besmira.krasniqi@gmail.com",
+        "full_name": "Besmira Krasniqi",
         "password": "test123",
         "user_type": "business",
         "phone": "+355696666777"
@@ -36,8 +36,8 @@ fake_users = [
         "phone": "+355697777888"
     },
     {
-        "email": "ermal.shehu@gmail.com",
-        "full_name": "Ermal Shehu",
+        "email": "ermela.shehu@gmail.com",
+        "full_name": "Ermela Shehu",
         "password": "test123",
         "user_type": "business",
         "phone": "+355698888999"

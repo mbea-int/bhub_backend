@@ -33,7 +33,7 @@ class Post(models.Model):
     category = models.CharField(max_length=100, choices=CATEGORY_CHOICES)
 
     image_url = models.URLField(max_length=500)
-    image_thumbnail = models.URLField(max_length=500, blank=True, null=True)
+    # image_thumbnail = models.URLField(max_length=500, blank=True, null=True)
 
     is_available = models.BooleanField(default=True)
     total_likes = models.IntegerField(default=0)

@@ -35,12 +35,30 @@ class PostViewSet(viewsets.ModelViewSet):
     @method_decorator(ratelimit(key='user', rate='3/1d', method='POST'))
     def create(self, request, *args, **kwargs):
         """Create new post (rate limited to 3 per day)"""
-        if not hasattr(request.user, 'business'):
+        if not request.user.businesses.exists():
             return Response(
                 {'detail': 'Only business owners can create posts'},
                 status=status.HTTP_403_FORBIDDEN
             )
-        return super().create(request, *args, **kwargs)
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        post = serializer.save()
+
+        # Update daily post limit
+        from django.utils import timezone
+        from django.db.models import F
+        today = timezone.now().date()
+        from .models import PostDailyLimit
+        PostDailyLimit.objects.update_or_create(
+            business=post.business,
+            date=today,
+            defaults={'posts_count': F('posts_count') + 1}
+        )
+
+        # Return Post with full detail (including business)
+        detail_serializer = PostDetailSerializer(post, context={'request': request})
+        headers = self.get_success_headers(detail_serializer.data)
+        return Response(detail_serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
     def retrieve(self, request, *args, **kwargs):
         """Get post detail and increment view count"""

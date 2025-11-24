@@ -1,19 +1,38 @@
 from rest_framework import serializers
+
+from businesses.models import Business
 from .models import Post, PostLike, SavedPost, PostDailyLimit
 from businesses.serializers import BusinessListSerializer
 
 
 class PostCreateSerializer(serializers.ModelSerializer):
+    business = serializers.PrimaryKeyRelatedField(
+        queryset=Business.objects.all(),
+        required=True
+    )
+
     class Meta:
         model = Post
         fields = [
             'product_name', 'description', 'price', 'category',
-            'image_url', 'auto_share_instagram', 'auto_share_facebook'
+            'image_url', 'auto_share_instagram', 'auto_share_facebook',
+            'business'
         ]
+
 
     def validate(self, attrs):
         request = self.context['request']
-        business = request.user.business
+        business = attrs.get('business')
+
+        if not business:
+            raise serializers.ValidationError('Business is required.')
+
+        try:
+            business = request.user.businesses.get(id=business.id)
+        except Business.DoesNotExist:
+            raise serializers.ValidationError('Invalid business ID.')
+
+        attrs['business'] = business
 
         # Check daily post limit
         if not business.is_within_post_limit():
@@ -24,22 +43,19 @@ class PostCreateSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
-        request = self.context['request']
-        business = request.user.business
-
-        # Auto-capitalize first letter of product name and description
+        # validated_data.pop('business_id', None)
         validated_data['product_name'] = validated_data['product_name'].strip().capitalize()
         validated_data['description'] = validated_data['description'].strip().capitalize()
 
-        post = Post.objects.create(business=business, **validated_data)
+        # business = validated_data.pop('business')
+        post = Post.objects.create(**validated_data)
 
         # Update daily limit counter
         from django.utils import timezone
         from django.db.models import F
-
         today = timezone.now().date()
         PostDailyLimit.objects.update_or_create(
-            business=business,
+            business=post.business,
             date=today,
             defaults={'posts_count': F('posts_count') + 1}
         )
@@ -57,7 +73,7 @@ class PostDetailSerializer(serializers.ModelSerializer):
         model = Post
         fields = [
             'id', 'business', 'product_name', 'description', 'price', 'category',
-            'image_url', 'image_thumbnail', 'is_available',
+            'image_url', 'is_available',
             'total_likes', 'total_inquiries', 'total_views', 'is_featured',
             'created_at', 'updated_at', 'is_liked', 'is_saved', 'can_inquire'
         ]
@@ -90,5 +106,6 @@ class PostListSerializer(serializers.ModelSerializer):
         model = Post
         fields = [
             'id', 'business', 'product_name', 'price', 'category',
-            'image_thumbnail', 'total_likes', 'created_at', 'is_featured'
+             'total_likes', 'created_at', 'is_featured'
         ]
+
