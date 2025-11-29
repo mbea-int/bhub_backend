@@ -18,8 +18,8 @@ ON_PYTHONANYWHERE = "PYTHONANYWHERE_SITE" in os.environ or "pythonanywhere.com" 
 
 # NGROK and ALLOWED_HOSTS Configuration
 if DEBUG and not ON_PYTHONANYWHERE:
-    NGROK_DOMAIN = '1240d2b10f77.ngrok-free.app'
-    NGROK_URL = "https://1240d2b10f77.ngrok-free.app"
+    NGROK_DOMAIN = 'b47a5b1de76c.ngrok-free.app'
+    NGROK_URL = "https://b47a5b1de76c.ngrok-free.app"
     ALLOWED_HOSTS = [
         NGROK_DOMAIN,
         'localhost',
@@ -27,13 +27,13 @@ if DEBUG and not ON_PYTHONANYWHERE:
         '10.218.234.148',
         '10.213.7.148',
         '10.90.56.45',
-        'a58e005e63e6.ngrok-free.app',
+        'b47a5b1de76c.ngrok-free.app',
         'nyja.pythonanywhere.com'
     ]
 else:
     NGROK_URL = None
     # For PythonAnywhere, add your username
-    ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,a58e005e63e6.ngrok-free.app').split(',')
+    ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,b47a5b1de76c.ngrok-free.app').split(',')
 
 # Application definition
 INSTALLED_APPS = [
@@ -218,7 +218,7 @@ if DEBUG and NGROK_URL:
         'http://10.218.234.148:8000',
         'http://10.213.7.148:8000',
         'https://nyja.pythonanywhere.com',
-        'https://a58e005e63e6.ngrok-free.app',
+        'https://b47a5b1de76c.ngrok-free.app',
         NGROK_URL
     ]
 else:

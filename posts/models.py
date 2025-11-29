@@ -1,6 +1,6 @@
 import uuid
 from django.db import models
-from businesses.models import Business
+from businesses.models import Business, BusinessCategory
 from users.models import User
 from django.core.validators import MinValueValidator
 from decimal import Decimal
@@ -12,26 +12,30 @@ class PostManager(models.Manager):
 
 
 class Post(models.Model):
-    CATEGORY_CHOICES = [
-        ('food', 'Food & Restaurants'),
-        ('fashion', 'Fashion & Clothing'),
-        ('books', 'Books & Education'),
-        ('health', 'Health & Wellness'),
-        ('education', 'Education & Training'),
-        ('services', 'Services'),
-        ('electronics', 'Electronics'),
-        ('home', 'Home & Garden'),
-        ('beauty', 'Beauty & Personal Care'),
-        ('sports', 'Sports & Fitness'),
-    ]
+    # CATEGORY_CHOICES = [
+    #     ('food', 'Food & Restaurants'),
+    #     ('fashion', 'Fashion & Clothing'),
+    #     ('books', 'Books & Education'),
+    #     ('health', 'Health & Wellness'),
+    #     ('education', 'Education & Training'),
+    #     ('services', 'Services'),
+    #     ('electronics', 'Electronics'),
+    #     ('home', 'Home & Garden'),
+    #     ('beauty', 'Beauty & Personal Care'),
+    #     ('sports', 'Sports & Fitness'),
+    # ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name='posts')
     product_name = models.CharField(max_length=255)
     description = models.TextField()
     price = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
-    category = models.CharField(max_length=100, choices=CATEGORY_CHOICES)
-
+    # category = models.CharField(max_length=100, choices=CATEGORY_CHOICES)
+    category = models.ForeignKey(
+        BusinessCategory,
+        on_delete=models.PROTECT,
+        related_name='posts'
+    )
     image_url = models.URLField(max_length=500)
     # image_thumbnail = models.URLField(max_length=500, blank=True, null=True)
 

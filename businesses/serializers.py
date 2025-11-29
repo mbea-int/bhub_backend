@@ -38,6 +38,10 @@ class BusinessCreateSerializer(serializers.ModelSerializer):
         validated_data['user'] = user
         return super().create(validated_data)
 
+    def to_representation(self, instance):
+        """Return full business detail after creation"""
+        return BusinessDetailSerializer(instance, context=self.context).data
+
 
 class BusinessDetailSerializer(serializers.ModelSerializer):
     owner = UserListSerializer(source='user', read_only=True)

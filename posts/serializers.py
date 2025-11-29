@@ -1,13 +1,17 @@
 from rest_framework import serializers
 
-from businesses.models import Business
+from businesses.models import Business, BusinessCategory
 from .models import Post, PostLike, SavedPost, PostDailyLimit
-from businesses.serializers import BusinessListSerializer
+from businesses.serializers import BusinessListSerializer, BusinessCategorySerializer
 
 
 class PostCreateSerializer(serializers.ModelSerializer):
     business = serializers.PrimaryKeyRelatedField(
         queryset=Business.objects.all(),
+        required=True
+    )
+    category = serializers.PrimaryKeyRelatedField(
+        queryset=BusinessCategory.objects.all(),
         required=True
     )
 
@@ -54,17 +58,22 @@ class PostCreateSerializer(serializers.ModelSerializer):
         from django.utils import timezone
         from django.db.models import F
         today = timezone.now().date()
-        PostDailyLimit.objects.update_or_create(
+        obj, created = PostDailyLimit.objects.get_or_create(
             business=post.business,
             date=today,
-            defaults={'posts_count': F('posts_count') + 1}
+            defaults={'posts_count': 1}
         )
+
+        if not created:
+            obj.posts_count = F('posts_count') + 1
+            obj.save()
 
         return post
 
 
 class PostDetailSerializer(serializers.ModelSerializer):
     business = BusinessListSerializer(read_only=True)
+    category = BusinessCategorySerializer(read_only=True)
     is_liked = serializers.SerializerMethodField()
     is_saved = serializers.SerializerMethodField()
     can_inquire = serializers.SerializerMethodField()
@@ -101,6 +110,7 @@ class PostDetailSerializer(serializers.ModelSerializer):
 class PostListSerializer(serializers.ModelSerializer):
     """Minimal post info for lists/feeds"""
     business = BusinessListSerializer(read_only=True)
+    category = BusinessCategorySerializer(read_only=True)
 
     class Meta:
         model = Post

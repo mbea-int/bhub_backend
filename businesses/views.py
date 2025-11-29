@@ -5,6 +5,9 @@ from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
 from datetime import timedelta
+
+from reviews.models import Review
+from reviews.serializers import ReviewDetailSerializer
 from .models import Business, Follower, Subscriber, BusinessAnalytics, BusinessCategory
 from .serializers import (
     BusinessCreateSerializer, BusinessDetailSerializer,
@@ -21,6 +24,7 @@ class BusinessCategoryViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = BusinessCategory.objects.filter(is_active=True)
     serializer_class = BusinessCategorySerializer
     permission_classes = [permissions.AllowAny]
+    # throttle_classes = []
     pagination_class = None
 
     def get_queryset(self):
@@ -245,6 +249,33 @@ class BusinessViewSet(viewsets.ModelViewSet):
             return Response({'detail': 'Successfully unsubscribed'})
         return Response({'detail': 'Not subscribed'}, status=status.HTTP_400_BAD_REQUEST)
 
+    # kjo mundeson te shtohet endpoint GET /api/businesses/<slug>/reviews/
+    @action(
+        detail=True,
+        methods=['get'],
+        url_path='reviews',
+        permission_classes=[permissions.AllowAny]
+    )
+    def get_reviews(self, request, slug=None):
+        """
+        Return all approved reviews for this business.
+        """
+        try:
+            business = self.get_object()
+        except Business.DoesNotExist:
+            return Response(
+                {'detail': 'Business not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        reviews = Review.objects.filter(
+            business=business,
+            is_approved=True
+        ).order_by('-created_at')
+
+        serializer = ReviewDetailSerializer(reviews, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
     @action(detail=True, methods=['get'], permission_classes=[IsBusinessOwner])
     def analytics(self, request, slug=None):
         """Get business analytics (last 30 days)"""
@@ -268,6 +299,7 @@ class BusinessViewSet(viewsets.ModelViewSet):
         serializer = BusinessListSerializer(businesses, many=True)
         return Response(serializer.data)
 
+    #TODO - Kjo pjesë do funksionojë OK për 100–200 biznese, por me 10,000+ do jetë e ngadaltë.
     @action(detail=False, methods=['get'])
     def nearby(self, request):
         """Get nearby businesses (requires lat/lng params)"""

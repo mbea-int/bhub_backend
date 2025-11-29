@@ -49,11 +49,16 @@ class PostViewSet(viewsets.ModelViewSet):
         from django.db.models import F
         today = timezone.now().date()
         from .models import PostDailyLimit
-        PostDailyLimit.objects.update_or_create(
+        daily_limit, created = PostDailyLimit.objects.get_or_create(
             business=post.business,
             date=today,
-            defaults={'posts_count': F('posts_count') + 1}
+            defaults={'posts_count': 1}
         )
+
+        if not created:
+            PostDailyLimit.objects.filter(business=post.business, date=today).update(
+                posts_count=F('posts_count') + 1
+            )
 
         # Return Post with full detail (including business)
         detail_serializer = PostDetailSerializer(post, context={'request': request})
