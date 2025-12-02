@@ -29,7 +29,7 @@ class BusinessAdmin(admin.ModelAdmin):
 
     fieldsets = (
         ('Basic Info', {
-            'fields': ('user', 'business_name', 'slug', 'description', 'category', 'logo')
+            'fields': ('user', 'business_name', 'slug', 'description', 'category', 'logo', 'logo_public_id')
         }),
         ('Contact', {
             'fields': ('phone', 'email', 'address', 'city', 'country')

@@ -1,13 +1,15 @@
-from django.db.models import Count
+from django.db.models import Count, Q
 from rest_framework import viewsets, status, permissions, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
 from datetime import timedelta
-
 from reviews.models import Review
 from reviews.serializers import ReviewDetailSerializer
+from django.db.models import Count, Q
+from django.utils.functional import cached_property
+from django.core.cache import cache
 from .models import Business, Follower, Subscriber, BusinessAnalytics, BusinessCategory
 from .serializers import (
     BusinessCreateSerializer, BusinessDetailSerializer,
@@ -20,19 +22,43 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+
+
 class BusinessCategoryViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = BusinessCategory.objects.filter(is_active=True)
     serializer_class = BusinessCategorySerializer
     permission_classes = [permissions.AllowAny]
-    # throttle_classes = []
     pagination_class = None
+
+    @cached_property
+    def filters(self):
+        params = self.request.query_params
+        return {
+            "city": params.get("city"),
+            "is_verified": params.get("is_verified"),
+            "is_premium": params.get("is_premium"),
+            "is_halal": params.get("is_halal_certified"),
+        }
 
     def get_queryset(self):
         queryset = super().get_queryset()
-        queryset = queryset.annotate(
-            total_businesses=Count('businesses')
+
+        # Ndertojme filtrin dinamike vetem nese duhet
+        bf = Q()
+        if self.filters["city"]:
+            bf &= Q(businesses__city__iexact=self.filters["city"])
+        if self.filters["is_verified"] is not None:
+            bf &= Q(businesses__is_verified=self.filters["is_verified"].lower() == "true")
+        if self.filters["is_premium"] is not None:
+            bf &= Q(businesses__is_premium=self.filters["is_premium"].lower() == "true")
+        if self.filters["is_halal"] is not None:
+            bf &= Q(businesses__is_halal_certified=self.filters["is_halal"].lower() == "true")
+
+        # Annotim super-efikas
+        return queryset.annotate(
+            total_businesses=Count("businesses", filter=bf, distinct=True)
         )
-        return queryset
+
 
     @action(detail=False, methods=['get'])
     def debug(self, request):
@@ -97,10 +123,11 @@ class BusinessViewSet(viewsets.ModelViewSet):
             )
             if logo_result:
                 data['logo'] = logo_result['secure_url']
-                logger.info(f"Logo uploaded successfully: {logo_result['secure_url']}")
+                data['logo_public_id'] = logo_result['public_id']  # ← SHTO KËTË
+                logger.info(f"Logo uploaded: {logo_result['secure_url']}")
             else:
-                logger.error("Failed to upload logo to Cloudinary")
                 data['logo'] = None
+                data['logo_public_id'] = None
 
         # Handle halal certificate upload
         if 'halal_certificate' in data and data['halal_certificate']:
@@ -110,10 +137,7 @@ class BusinessViewSet(viewsets.ModelViewSet):
             )
             if cert_result:
                 data['halal_certificate'] = cert_result['secure_url']
-                logger.info(f"Certificate uploaded successfully: {cert_result['secure_url']}")
-            else:
-                logger.error("Failed to upload certificate to Cloudinary")
-                data['halal_certificate'] = None
+                data['halal_certificate_public_id'] = cert_result['public_id']  # ← SHTO KËTË
 
         serializer = self.get_serializer(data=data)
         serializer.is_valid(raise_exception=True)
@@ -126,20 +150,69 @@ class BusinessViewSet(viewsets.ModelViewSet):
         instance = self.get_object()
         data = request.data.copy()
 
-        # Handle logo update
-        if 'logo' in data and data['logo'] and not data['logo'].startswith('http'):
-            # Delete old logo if exists
-            if instance.logo:
-                old_public_id = instance.logo.split('/')[-1].split('.')[0]
-                CloudinaryService.delete_image(old_public_id)
+        # ✅ Handle logo update - FSHI TË VJETRËN
+        if 'logo' in data:
+            new_logo_value = data.get('logo')
 
-            # Upload new logo
-            logo_result = CloudinaryService.upload_business_logo(
-                data['logo'],
-                instance.business_name
-            )
-            if logo_result:
-                data['logo'] = logo_result['secure_url']
+            # Nëse logo është empty/null, fshi nga Cloudinary
+            if new_logo_value in [None, '', 'null', 'None']:
+                logger.info(f"🗑️ Deleting logo for business: {instance.business_name}")
+
+                # Fshi logon e vjetër nga Cloudinary
+                if instance.logo_public_id:
+                    deleted = CloudinaryService.delete_image(instance.logo_public_id)
+                    logger.info(f"Old logo deleted from Cloudinary: {deleted}")
+
+                # Vendos None në databazë
+                data['logo'] = None
+                data['logo_public_id'] = None
+
+            # Nëse është foto e re (jo URL ekzistues)
+            elif not new_logo_value.startswith('http'):
+                logger.info(f"📤 Uploading new logo for: {instance.business_name}")
+
+                # Fshi logon e vjetër nëse ekziston
+                if instance.logo_public_id:
+                    deleted = CloudinaryService.delete_image(instance.logo_public_id)
+                    logger.info(f"Old logo deleted before upload: {deleted}")
+
+                # Upload logon e re
+                logo_result = CloudinaryService.upload_business_logo(
+                    new_logo_value,
+                    instance.business_name
+                )
+
+                if logo_result:
+                    data['logo'] = logo_result['secure_url']
+                    data['logo_public_id'] = logo_result['public_id']
+                    logger.info(f"✅ New logo uploaded: {logo_result['secure_url']}")
+                else:
+                    logger.error("❌ Failed to upload new logo")
+                    # Nëse dështon upload, mbaj të vjetrën
+                    data.pop('logo', None)
+                    data.pop('logo_public_id', None)
+
+            # ✅ E njëjta logjikë për halal certificate
+        if 'halal_certificate' in data:
+            new_cert_value = data.get('halal_certificate')
+
+            if new_cert_value in [None, '', 'null', 'None']:
+                if instance.halal_certificate_public_id:
+                    CloudinaryService.delete_image(instance.halal_certificate_public_id)
+                data['halal_certificate'] = None
+                data['halal_certificate_public_id'] = None
+
+            elif not new_cert_value.startswith('http'):
+                if instance.halal_certificate_public_id:
+                    CloudinaryService.delete_image(instance.halal_certificate_public_id)
+
+                cert_result = CloudinaryService.upload_halal_certificate(
+                    new_cert_value,
+                    instance.business_name
+                )
+                if cert_result:
+                    data['halal_certificate'] = cert_result['secure_url']
+                    data['halal_certificate_public_id'] = cert_result['public_id']
 
         serializer = self.get_serializer(instance, data=data, partial=partial)
         serializer.is_valid(raise_exception=True)
@@ -161,7 +234,12 @@ class BusinessViewSet(viewsets.ModelViewSet):
     def my_businesses(self, request):
         """Get all businesses owned by current user"""
         businesses = request.user.businesses.all()
-        serializer = BusinessListSerializer(businesses, many=True)
+        # serializer = BusinessListSerializer(businesses, many=True)
+        serializer = BusinessDetailSerializer(
+            businesses,
+            many=True,
+            context={'request': request}  #Shtojme context për computed fields
+        )
         return Response(serializer.data)
 
     @action(detail=True, methods=['post'], permission_classes=[IsBusinessOwner])

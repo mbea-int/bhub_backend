@@ -155,15 +155,17 @@ class Business(models.Model):
     category = models.ForeignKey(
         BusinessCategory,
         on_delete=models.PROTECT,
-        related_name='businesses'
+        related_name='businesses',
+        db_index=True
     )
     # to identify main business
     is_primary = models.BooleanField(default=False)
     logo = models.URLField(max_length=500, blank=True, null=True)
+    logo_public_id = models.CharField(max_length=255, blank=True, null=True)
     phone = models.CharField(max_length=20)
     email = models.EmailField()
     address = models.TextField()
-    city = models.CharField(max_length=100)
+    city = models.CharField(max_length=100, db_index=True)
     country = models.CharField(max_length=100, default='Albania')
 
     latitude = models.DecimalField(max_digits=10, decimal_places=8, blank=True, null=True)
@@ -172,7 +174,7 @@ class Business(models.Model):
     business_hours = models.JSONField(blank=True, null=True)
     is_open_now = models.BooleanField(default=False)
 
-    is_verified = models.BooleanField(default=False)
+    is_verified = models.BooleanField(default=False, db_index=True)
     verification_documents = models.JSONField(blank=True, null=True)
     verification_status = models.CharField(
         max_length=20,
@@ -182,7 +184,7 @@ class Business(models.Model):
     )
     verification_date = models.DateTimeField(blank=True, null=True)
 
-    is_premium = models.BooleanField(default=False)
+    is_premium = models.BooleanField(default=False, db_index=True)
     premium_until = models.DateTimeField(blank=True, null=True)
 
     max_posts_per_day = models.IntegerField(default=3, validators=[MinValueValidator(1)])
@@ -193,9 +195,10 @@ class Business(models.Model):
                                          validators=[MinValueValidator(0), MaxValueValidator(5)])
     total_reviews = models.IntegerField(default=0)
 
-    is_halal_certified = models.BooleanField(default=False)
+    is_halal_certified = models.BooleanField(default=False, db_index=True)
     halal_certificate = models.URLField(max_length=500, blank=True, null=True)
-
+    halal_certificate = models.URLField(max_length=500, blank=True, null=True)
+    halal_certificate_public_id = models.CharField(max_length=255, blank=True, null=True)
     social_instagram = models.CharField(max_length=255, blank=True, null=True)
     social_facebook = models.CharField(max_length=255, blank=True, null=True)
     website = models.URLField(max_length=500, blank=True, null=True)

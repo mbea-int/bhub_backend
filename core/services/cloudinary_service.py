@@ -1,7 +1,4 @@
 import cloudinary.uploader
-import base64
-import io
-from PIL import Image
 from django.conf import settings
 import logging
 import uuid
@@ -14,17 +11,6 @@ class CloudinaryService:
 
     @staticmethod
     def upload_image(image_data, folder='general', resource_type='image'):
-        """
-        Upload image to Cloudinary
-
-        Args:
-            image_data: Can be file object, base64 string, or path
-            folder: Cloudinary folder name
-            resource_type: Type of resource (image, video, etc)
-
-        Returns:
-            dict: Cloudinary response or None if failed
-        """
         try:
             upload_params = {
                 'folder': f'muslim-community/{folder}',
@@ -35,28 +21,16 @@ class CloudinaryService:
                 'transformation': settings.CLOUDINARY_DEFAULT_TRANSFORMATIONS
             }
 
-            # Handle different types of image data
-            if isinstance(image_data, str):
-                if image_data.startswith('data:image'):
-                    # Handle base64
-                    result = cloudinary.uploader.upload(
-                        image_data,
-                        **upload_params
-                    )
-                else:
-                    # Handle file path or URL
-                    result = cloudinary.uploader.upload(
-                        image_data,
-                        **upload_params
-                    )
-            else:
-                # Handle file object
-                result = cloudinary.uploader.upload(
-                    image_data,
-                    **upload_params
-                )
+            result = cloudinary.uploader.upload(image_data, **upload_params)
 
-            return result
+            # ✅ Kthe edhe public_id edhe url
+            return {
+                'secure_url': result.get('secure_url'),
+                'public_id': result.get('public_id'),
+                'format': result.get('format'),
+                'width': result.get('width'),
+                'height': result.get('height'),
+            }
 
         except Exception as e:
             logger.error(f"Cloudinary upload error: {str(e)}")
@@ -65,7 +39,6 @@ class CloudinaryService:
     @staticmethod
     def upload_business_logo(image_data, business_name):
         """Upload business logo to Cloudinary"""
-        public_id = f"business_logos/{uuid.uuid4()}"
         return CloudinaryService.upload_image(
             image_data,
             folder='businesses/logos',
@@ -104,9 +77,13 @@ class CloudinaryService:
 
     @staticmethod
     def delete_image(public_id):
-        """Delete image from Cloudinary"""
+        """Delete image from Cloudinary using public_id"""
         try:
-            result = cloudinary.uploader.destroy(public_id)
+            if not public_id:
+                return False
+
+            result = cloudinary.uploader.destroy(public_id, invalidate=True)
+            logger.info(f"Cloudinary delete result: {result}")
             return result.get('result') == 'ok'
         except Exception as e:
             logger.error(f"Cloudinary delete error: {str(e)}")

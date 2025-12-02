@@ -52,6 +52,8 @@ class BusinessDetailSerializer(serializers.ModelSerializer):
     description = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     verification_status = serializers.CharField(read_only=True, default='pending')
     logo = serializers.URLField(required=False, allow_null=True, allow_blank=True)
+    logo_public_id = serializers.CharField(read_only=True)
+    halal_certificate_public_id = serializers.CharField(read_only=True)
     website = serializers.URLField(required=False, allow_null=True, allow_blank=True)
 
     # Computed fields
@@ -64,17 +66,19 @@ class BusinessDetailSerializer(serializers.ModelSerializer):
         model = Business
         fields = [
             'id', 'owner', 'business_name', 'slug', 'description', 'category',
-            'logo', 'website', 'phone', 'email', 'address', 'city', 'country',
+            'logo', 'logo_public_id',
+            'website', 'phone', 'email', 'address', 'city', 'country',
             'latitude', 'longitude', 'business_hours', 'is_open_now',
             'is_verified', 'verification_status', 'is_premium', 'is_primary',
             'total_followers', 'total_subscribers', 'average_rating', 'total_reviews',
-            'is_halal_certified', 'social_instagram', 'social_facebook',
-            'created_at', 'is_following', 'is_subscribed', 'is_mine', 'distance_km'
+            'is_halal_certified', 'halal_certificate', 'halal_certificate_public_id',
+            'social_instagram', 'social_facebook', 'distance_km',
+            'created_at', 'is_following', 'is_subscribed', 'is_mine'
         ]
         read_only_fields = [
-            'id', 'slug', 'owner', 'is_verified', 'verification_status',
-            'is_premium', 'total_followers', 'total_subscribers',
-            'average_rating', 'total_reviews', 'created_at'
+            'id', 'slug', 'owner', 'logo_public_id', 'halal_certificate_public_id',
+            'is_verified', 'verification_status', 'is_premium',
+            'total_followers', 'total_subscribers', 'average_rating', 'total_reviews'
         ]
 
     def to_representation(self, instance):
@@ -84,6 +88,16 @@ class BusinessDetailSerializer(serializers.ModelSerializer):
         # Ensure these fields are never None in response
         if not data.get('slug'):
             data['slug'] = str(instance.id)
+
+        # Print për debugging
+        print(f"🔵 Serializing business: {instance.business_name}")
+        print(f"  description: {data.get('description')}")
+        print(f"  phone: {data.get('phone')}")
+        print(f"  email: {data.get('email')}")
+        print(f"  address: {data.get('address')}")
+        print(f"  city: {data.get('city')}")
+        print(f"  social_instagram: {data.get('social_instagram')}")
+        print(f"  social_facebook: {data.get('social_facebook')}")
 
         data['description'] = data.get('description') or ''
         data['verification_status'] = data.get('verification_status') or 'pending'
