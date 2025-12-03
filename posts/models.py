@@ -11,33 +11,92 @@ class PostManager(models.Manager):
         return self.filter(is_available=True, business__user__is_active=True)
 
 
-class Post(models.Model):
-    # CATEGORY_CHOICES = [
-    #     ('food', 'Food & Restaurants'),
-    #     ('fashion', 'Fashion & Clothing'),
-    #     ('books', 'Books & Education'),
-    #     ('health', 'Health & Wellness'),
-    #     ('education', 'Education & Training'),
-    #     ('services', 'Services'),
-    #     ('electronics', 'Electronics'),
-    #     ('home', 'Home & Garden'),
-    #     ('beauty', 'Beauty & Personal Care'),
-    #     ('sports', 'Sports & Fitness'),
-    # ]
+class ProductCategory(models.Model):
+    """
+    Kategoritë e produkteve/shërbimeve që krijohen nga bizneset.
+    Çdo biznes mund të krijojë kategoritë e veta.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    business = models.ForeignKey(
+        Business,
+        on_delete=models.CASCADE,
+        related_name='product_categories'
+    )
+    name = models.CharField(max_length=100)
+    slug = models.SlugField(max_length=150, blank=True)
+    description = models.TextField(blank=True, null=True)
+    icon = models.CharField(max_length=50, blank=True, null=True, help_text='Material Icon name')
+    display_order = models.IntegerField(default=0, help_text='Order for displaying categories')
+    is_active = models.BooleanField(default=True)
 
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'product_categories'
+        ordering = ['display_order', 'name']
+        unique_together = ['business', 'slug']
+        verbose_name = 'Product Category'
+        verbose_name_plural = 'Product Categories'
+        indexes = [
+            models.Index(fields=['business', 'is_active']),
+        ]
+
+    def __str__(self):
+        return f"{self.business.business_name} - {self.name}"
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            from django.utils.text import slugify
+            base_slug = slugify(self.name)
+            self.slug = base_slug
+            counter = 1
+            while ProductCategory.objects.filter(
+                    business=self.business,
+                    slug=self.slug
+            ).exclude(pk=self.pk).exists():
+                self.slug = f"{base_slug}-{counter}"
+                counter += 1
+        super().save(*args, **kwargs)
+
+    @property
+    def posts_count(self):
+        """Number of active posts in this category"""
+        return self.posts.filter(is_available=True).count()
+
+
+class Post(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     business = models.ForeignKey(Business, on_delete=models.CASCADE, related_name='posts')
-    product_name = models.CharField(max_length=255)
-    description = models.TextField()
-    price = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
-    # category = models.CharField(max_length=100, choices=CATEGORY_CHOICES)
-    category = models.ForeignKey(
+
+    # Kategoria e biznesit (Food, Fashion, etc.)
+    business_category = models.ForeignKey(
         BusinessCategory,
         on_delete=models.PROTECT,
-        related_name='posts'
+        related_name='posts',
+        help_text='Main business category (Food, Fashion, etc.)'
     )
+
+    # Kategoria e produktit (Bluza, Xhaketa, etc.) - OPSIONALE
+    product_category = models.ForeignKey(
+        ProductCategory,
+        on_delete=models.SET_NULL,
+        related_name='posts',
+        blank=True,
+        null=True,
+        help_text='Specific product category created by business'
+    )
+
+    product_name = models.CharField(max_length=255)
+    description = models.TextField()
+    price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.01'))]
+    )
+
     image_url = models.URLField(max_length=500)
-    # image_thumbnail = models.URLField(max_length=500, blank=True, null=True)
+    image_thumbnail = models.URLField(max_length=500, blank=True, null=True)
 
     is_available = models.BooleanField(default=True)
     total_likes = models.IntegerField(default=0)
@@ -58,12 +117,26 @@ class Post(models.Model):
         db_table = 'posts'
         ordering = ['-created_at']
         indexes = [
-            models.Index(fields=['category', '-created_at']),
+            models.Index(fields=['business_category', '-created_at']),
+            models.Index(fields=['product_category', '-created_at']),
             models.Index(fields=['is_featured', '-created_at']),
+            models.Index(fields=['business', 'product_category', '-created_at']),
         ]
 
     def __str__(self):
         return f"{self.product_name} - {self.business.business_name}"
+
+    def clean(self):
+        """Validate that product_category belongs to the same business"""
+        from django.core.exceptions import ValidationError
+        if self.product_category and self.product_category.business != self.business:
+            raise ValidationError(
+                'Product category must belong to the same business.'
+            )
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
 
     def increment_views(self):
         """Atomic increment of views"""
