@@ -6,8 +6,8 @@ class GroupAdmin(admin.ModelAdmin):
     list_display = ['name', 'category', 'total_members', 'total_posts', 'is_active', 'created_at']
     list_filter = ['category', 'is_active', 'created_at']
     search_fields = ['name', 'description']
-    readonly_fields = ['slug', 'total_members', 'total_posts', 'created_at', 'updated_at']
-    prepopulated_fields = {'slug': ('name',)}
+    readonly_fields = ['total_members', 'total_posts', 'created_at', 'updated_at']
+    # prepopulated_fields = {'slug': ('name',)}
 
 @admin.register(GroupMember)
 class GroupMemberAdmin(admin.ModelAdmin):
