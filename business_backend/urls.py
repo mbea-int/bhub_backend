@@ -8,7 +8,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 # Import all viewsets
 from users.views import UserViewSet
 from businesses.views import BusinessViewSet, BusinessCategoryViewSet
-from posts.views import PostViewSet
+from posts.views import PostViewSet, ProductCategoryViewSet
 from reviews.views import InquiryViewSet, ReviewViewSet
 from groups.views import GroupViewSet, GroupPostViewSet
 from notifications.views import NotificationViewSet
@@ -23,6 +23,7 @@ router.register(r'users', UserViewSet, basename='user')
 router.register(r'businesses', BusinessViewSet, basename='business')
 router.register(r'business-categories', BusinessCategoryViewSet, basename='business-category')
 router.register(r'posts', PostViewSet, basename='post')
+router.register(r'product-categories', ProductCategoryViewSet, basename='product-category')
 router.register(r'inquiries', InquiryViewSet, basename='inquiry')
 router.register(r'reviews', ReviewViewSet, basename='review')
 router.register(r'groups', GroupViewSet, basename='group')

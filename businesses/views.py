@@ -3,6 +3,7 @@ from rest_framework import viewsets, status, permissions, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework import filters as drf_filters
 from django.utils import timezone
 from datetime import timedelta
 from reviews.models import Review
@@ -15,6 +16,7 @@ from .serializers import (
     BusinessCreateSerializer, BusinessDetailSerializer,
     BusinessListSerializer, BusinessAnalyticsSerializer, BusinessCategorySerializer
 )
+from businesses.filters.business_filter import BusinessFilter
 from utils.permissions import IsBusinessOwner
 from core.services.cloudinary_service import CloudinaryService
 import logging
@@ -22,7 +24,17 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-
+# class BusinessFilter(filters.FilterSet):
+#     """Custom filter për Business model"""
+#     category = filters.CharFilter(field_name='category__slug', lookup_expr='exact')
+#     city = filters.CharFilter(lookup_expr='icontains')
+#     is_verified = filters.BooleanFilter()
+#     is_premium = filters.BooleanFilter()
+#     is_halal_certified = filters.BooleanFilter()
+#
+#     class Meta:
+#         model = Business
+#         fields = ['category', 'city', 'is_verified', 'is_premium', 'is_halal_certified']
 
 class BusinessCategoryViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = BusinessCategory.objects.filter(is_active=True)
@@ -73,8 +85,9 @@ class BusinessViewSet(viewsets.ModelViewSet):
     queryset = Business.objects.active()
     serializer_class = BusinessDetailSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['category', 'city', 'is_verified', 'is_premium', 'is_halal_certified']
+    filter_backends = [DjangoFilterBackend, drf_filters.SearchFilter, drf_filters.OrderingFilter]
+    filterset_class = BusinessFilter  # ← PËRDOR CUSTOM FILTER
+    # filterset_fields = ['category', 'city', 'is_verified', 'is_premium', 'is_halal_certified']  # ← HEQ KËTË
     search_fields = ['business_name', 'description', 'address']
     ordering_fields = ['created_at', 'average_rating', 'total_followers']
     lookup_field = 'slug'

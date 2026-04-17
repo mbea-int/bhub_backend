@@ -64,18 +64,47 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 
 class UserProfileSerializer(serializers.ModelSerializer):
     total_referrals = serializers.SerializerMethodField()
+    total_posts = serializers.SerializerMethodField()
+    average_rating = serializers.SerializerMethodField()
+    total_saved = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = [
             'id', 'email', 'full_name', 'phone', 'bio', 'profile_image',
             'user_type', 'referral_code', 'language', 'profile_visibility',
-            'is_email_verified', 'created_at', 'total_referrals'
+            'is_email_verified', 'created_at', 'total_referrals',
+            'total_posts', 'average_rating', 'total_saved'
         ]
-        read_only_fields = ['id', 'email', 'user_type', 'referral_code', 'is_email_verified', 'created_at']
+        read_only_fields = [
+            'id', 'email', 'user_type', 'referral_code',
+            'is_email_verified', 'created_at'
+        ]
 
     def get_total_referrals(self, obj):
         return obj.referrals.count()
+
+    def get_total_posts(self, obj):
+        """Numri total i postimeve të userit (nëpërmjet bizneseve të tij)"""
+        from posts.models import Post
+        if obj.user_type == 'business':
+            business_ids = obj.businesses.values_list('id', flat=True)
+            return Post.objects.filter(business_id__in=business_ids).count()
+        return 0
+
+    def get_average_rating(self, obj):
+        """Mesatarja e vlerësimeve të bizneseve të userit"""
+        from django.db.models import Avg
+        if obj.user_type == 'business':
+            result = obj.businesses.aggregate(avg=Avg('average_rating'))
+            avg = result['avg']
+            return float(avg) if avg else 0.0
+        return 0.0
+
+    def get_total_saved(self, obj):
+        """Numri i postimeve që useri ka ruajtur"""
+        from posts.models import SavedPost
+        return SavedPost.objects.filter(user=obj).count()
 
 
 # class UserUpgradeSerializer(serializers.Serializer):

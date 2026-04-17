@@ -4,9 +4,126 @@ from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from django_ratelimit.decorators import ratelimit
 from django.utils.decorators import method_decorator
-from .models import Post, PostLike, SavedPost
-from .serializers import PostCreateSerializer, PostDetailSerializer, PostListSerializer
+from django.db.models import Count
+
+from .models import Post, PostLike, SavedPost, ProductCategory
+from .serializers import (
+    PostCreateSerializer, PostDetailSerializer, PostListSerializer,
+    ProductCategorySerializer, ProductCategoryCreateSerializer
+)
 from utils.permissions import IsBusinessOwnerOfPost
+
+
+class ProductCategoryViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for managing product categories within a business
+    """
+    serializer_class = ProductCategorySerializer
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['name', 'description']
+    ordering_fields = ['display_order', 'name', 'created_at']
+    ordering = ['display_order', 'name']
+
+    def get_queryset(self):
+        queryset = ProductCategory.objects.all()
+
+        # Filter by business
+        business_id = self.request.query_params.get('business')
+        if business_id:
+            queryset = queryset.filter(business_id=business_id)
+
+        # Filter only active categories
+        if self.request.query_params.get('active_only') == 'true':
+            queryset = queryset.filter(is_active=True)
+
+        # Annotate with posts count
+        queryset = queryset.annotate(posts_count=Count('posts'))
+
+        return queryset
+
+    def get_serializer_class(self):
+        if self.action in ['create', 'update', 'partial_update']:
+            return ProductCategoryCreateSerializer
+        return ProductCategorySerializer
+
+    def get_permissions(self):
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            return [permissions.IsAuthenticated()]
+        return super().get_permissions()
+
+    def create(self, request, *args, **kwargs):
+        """Create a new product category"""
+        business_id = request.data.get('business_id')
+
+        if not business_id:
+            return Response(
+                {'detail': 'Business ID is required.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Verify ownership
+        try:
+            business = request.user.businesses.get(id=business_id)
+        except:
+            return Response(
+                {'detail': 'Invalid business or you do not own this business.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        serializer = self.get_serializer(
+            data=request.data,
+            context={'request': request, 'business_id': business_id}
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    def update(self, request, *args, **kwargs):
+        """Update product category - only owner can update"""
+        instance = self.get_object()
+
+        # Check ownership
+        if instance.business.user != request.user:
+            return Response(
+                {'detail': 'You do not have permission to edit this category.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        return super().update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        """Delete product category - only if no posts"""
+        instance = self.get_object()
+
+        # Check ownership
+        if instance.business.user != request.user:
+            return Response(
+                {'detail': 'You do not have permission to delete this category.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Check if category has posts
+        if instance.posts.exists():
+            return Response(
+                {'detail': 'Cannot delete category with existing posts. Please move or delete posts first.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        return super().destroy(request, *args, **kwargs)
+
+    @action(detail=True, methods=['get'])
+    def posts(self, request, pk=None):
+        """Get all posts in this category"""
+        category = self.get_object()
+        posts = Post.objects.filter(
+            product_category=category,
+            is_available=True
+        ).select_related('business', 'business_category')
+
+        serializer = PostListSerializer(posts, many=True, context={'request': request})
+        return Response(serializer.data)
 
 
 class PostViewSet(viewsets.ModelViewSet):
@@ -14,7 +131,7 @@ class PostViewSet(viewsets.ModelViewSet):
     serializer_class = PostDetailSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['category', 'business', 'is_featured']
+    filterset_fields = ['business_category', 'product_category', 'business', 'is_featured']
     search_fields = ['product_name', 'description']
     ordering_fields = ['created_at', 'price', 'total_likes']
 
@@ -34,33 +151,17 @@ class PostViewSet(viewsets.ModelViewSet):
 
     @method_decorator(ratelimit(key='user', rate='3/1d', method='POST'))
     def create(self, request, *args, **kwargs):
-        """Create new post (rate limited to 3 per day)"""
+        """Create new post"""
         if not request.user.businesses.exists():
             return Response(
                 {'detail': 'Only business owners can create posts'},
                 status=status.HTTP_403_FORBIDDEN
             )
+
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         post = serializer.save()
 
-        # Update daily post limit
-        from django.utils import timezone
-        from django.db.models import F
-        today = timezone.now().date()
-        from .models import PostDailyLimit
-        daily_limit, created = PostDailyLimit.objects.get_or_create(
-            business=post.business,
-            date=today,
-            defaults={'posts_count': 1}
-        )
-
-        if not created:
-            PostDailyLimit.objects.filter(business=post.business, date=today).update(
-                posts_count=F('posts_count') + 1
-            )
-
-        # Return Post with full detail (including business)
         detail_serializer = PostDetailSerializer(post, context={'request': request})
         headers = self.get_success_headers(detail_serializer.data)
         return Response(detail_serializer.data, status=status.HTTP_201_CREATED, headers=headers)
@@ -126,7 +227,7 @@ class PostViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def featured(self, request):
-        """Get featured posts (premium businesses)"""
+        """Get featured posts"""
         posts = Post.objects.available().filter(is_featured=True)
         serializer = PostListSerializer(posts, many=True, context={'request': request})
         return Response(serializer.data)
@@ -134,9 +235,12 @@ class PostViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def my_posts(self, request):
         """Get current user's business posts"""
-        if not hasattr(request.user, 'business'):
-            return Response({'detail': 'No business profile found'}, status=status.HTTP_404_NOT_FOUND)
+        posts = Post.objects.filter(business__user=request.user)
 
-        posts = Post.objects.filter(business=request.user.business)
+        # Filter by product category if specified
+        product_category = request.query_params.get('product_category')
+        if product_category:
+            posts = posts.filter(product_category_id=product_category)
+
         serializer = PostListSerializer(posts, many=True, context={'request': request})
         return Response(serializer.data)

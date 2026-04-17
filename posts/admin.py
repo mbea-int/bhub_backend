@@ -1,34 +1,77 @@
 from django.contrib import admin
-from .models import Post, PostLike, SavedPost, PostDailyLimit
+from .models import Post, PostLike, SavedPost, PostDailyLimit, ProductCategory
+
+
+@admin.register(ProductCategory)
+class ProductCategoryAdmin(admin.ModelAdmin):
+    list_display = ['name', 'business', 'is_active', 'display_order', 'created_at']
+    list_filter = ['business', 'is_active']
+    search_fields = ['name', 'business__business_name']
+    ordering = ['business', 'display_order']
+    readonly_fields = ['created_at', 'updated_at']
+    prepopulated_fields = {"slug": ("name",)}  # opsionale
 
 
 @admin.register(Post)
 class PostAdmin(admin.ModelAdmin):
-    list_display = ['product_name', 'business', 'category', 'price', 'is_available', 'is_featured', 'total_views',
-                    'total_likes', 'created_at']
-    list_filter = ['category', 'is_available', 'is_featured', 'created_at']
-    search_fields = ['product_name', 'description', 'business__business_name']
-    ordering = ['-created_at']
-    readonly_fields = ['total_likes', 'total_inquiries', 'total_views', 'created_at', 'updated_at']
+    list_display = [
+        'product_name',
+        'business',
+        'business_category',
+        'product_category',
+        'price',
+        'is_available',
+        'is_featured',
+        'total_views',
+        'total_likes',
+        'created_at',
+    ]
 
-    actions = ['mark_featured', 'unmark_featured', 'mark_unavailable']
+    list_filter = [
+        'business_category',
+        'product_category',
+        'is_available',
+        'is_featured',
+        'created_at',
+    ]
+
+    search_fields = [
+        'product_name',
+        'description',
+        'business__business_name'
+    ]
+
+    ordering = ['-created_at']
+
+    readonly_fields = [
+        'total_likes',
+        'total_inquiries',
+        'total_views',
+        'created_at',
+        'updated_at'
+    ]
+
+    actions = [
+        'mark_featured',
+        'unmark_featured',
+        'mark_unavailable'
+    ]
+
+    # === ACTIONS ===
 
     def mark_featured(self, request, queryset):
         queryset.update(is_featured=True)
-        self.message_user(request, f'{queryset.count()} posts marked as featured')
-
+        self.message_user(request, f"{queryset.count()} posts marked as featured")
     mark_featured.short_description = 'Mark as featured'
 
     def unmark_featured(self, request, queryset):
         queryset.update(is_featured=False)
-        self.message_user(request, f'{queryset.count()} posts unmarked as featured')
-
+        self.message_user(request, f"{queryset.count()} posts unmarked as featured")
     unmark_featured.short_description = 'Remove featured status'
 
     def mark_unavailable(self, request, queryset):
         queryset.update(is_available=False)
-        self.message_user(request, f'{queryset.count()} posts marked as unavailable')
-
+        self.message_user(request, f"{queryset.count()} posts marked as unavailable")
     mark_unavailable.short_description = 'Mark as unavailable'
 
 

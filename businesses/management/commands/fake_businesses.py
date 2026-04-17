@@ -1,7 +1,7 @@
 fake_businesses = [
     # Restaurants (2)
     {
-        "user_email": "ardian.hoxha@gmail.com",
+        "user_email": "ardiana.hoxha@gmail.com",
         "business_name": "Restoranti Tradicional Shqiptar",
         "slug": "restoranti-tradicional-shqiptar",
         "description": "Restoranti ynë ofron ushqime tradicionale shqiptare të përgatitura me receta të trashëguara brez pas brezi. Të gjitha produktet janë 100% halal dhe të certifikuara.",
@@ -50,7 +50,7 @@ fake_businesses = [
 
     # Markets (2)
     {
-        "user_email": "besmir.krasniqi@gmail.com",
+        "user_email": "besmira.krasniqi@gmail.com",
         "business_name": "Halal Market Tirana",
         "slug": "halal-market-tirana",
         "description": "Supermarket me produkte ekskluzivisht halal. Importojmë produkte nga vende të ndryshme muslimane.",
@@ -69,7 +69,7 @@ fake_businesses = [
 
     # Clothing Stores (2)
     {
-        "user_email": "ermal.shehu@gmail.com",
+        "user_email": "ermela.shehu@gmail.com",
         "business_name": "Modest Fashion Albania",
         "slug": "modest-fashion-albania",
         "description": "Veshje moderne dhe modeste për gratë muslimane. Koleksione të reja çdo sezon.",
@@ -84,7 +84,7 @@ fake_businesses = [
         "is_primary": True
     },
     {
-        "user_email": "ardian.hoxha@gmail.com",
+        "user_email": "ardiana.hoxha@gmail.com",
         "business_name": "Butiku Eleganca",
         "slug": "butiku-eleganca",
         "description": "Veshje tradicionale dhe moderne për të gjithë familjen.",
@@ -98,7 +98,7 @@ fake_businesses = [
 
     # Barbershops (1)
     {
-        "user_email": "besmir.krasniqi@gmail.com",
+        "user_email": "besmira.krasniqi@gmail.com",
         "business_name": "The Gentleman Barber",
         "slug": "the-gentleman-barber",
         "description": "Berber profesional për burra. Prerje moderne dhe tradicionale.",
@@ -127,7 +127,7 @@ fake_businesses = [
 
     # Islamic Schools (1)
     {
-        "user_email": "ermal.shehu@gmail.com",
+        "user_email": "ermela.shehu@gmail.com",
         "business_name": "Shkolla Kurani",
         "slug": "shkolla-kurani",
         "description": "Mësime Kurani dhe gjuhës arabe për të gjitha moshat.",
@@ -141,7 +141,7 @@ fake_businesses = [
 
     # Bakeries (2)
     {
-        "user_email": "ardian.hoxha@gmail.com",
+        "user_email": "ardiana.hoxha@gmail.com",
         "business_name": "Furra Halal",
         "slug": "furra-halal",
         "description": "Produkte furre të freskëta çdo ditë. Të gjitha produktet janë halal.",
