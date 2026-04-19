@@ -68,7 +68,7 @@ class GroupViewSet(viewsets.ModelViewSet):
         if existing:
             if existing.status == 'approved':
                 return Response(
-                    {'detail': 'Already a member'},
+                    {'detail': 'Already a member', 'status': 'approved'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             elif existing.status == 'banned':
@@ -78,7 +78,7 @@ class GroupViewSet(viewsets.ModelViewSet):
                 )
             elif existing.status == 'pending':
                 return Response(
-                    {'detail': 'Join request pending approval'},
+                    {'detail': 'Join request pending approval', 'status': 'pending'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
@@ -91,18 +91,16 @@ class GroupViewSet(viewsets.ModelViewSet):
 
         if existing_request:
             return Response(
-                {'detail': 'Join request already pending'},
+                {'detail': 'Join request already pending', 'status': 'pending'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         if group.require_approval:
-            # Create join request
             join_request = GroupJoinRequest.objects.create(
                 group=group,
                 user=request.user,
                 message=request.data.get('message', '')
             )
-            # Create member with pending status
             GroupMember.objects.create(
                 group=group,
                 user=request.user,
@@ -111,11 +109,11 @@ class GroupViewSet(viewsets.ModelViewSet):
             )
             return Response({
                 'detail': 'Join request sent. Waiting for admin approval.',
-                'request_id': str(join_request.id)
+                'status': 'pending',  # ✅ SHTUAR
+                'request_id': str(join_request.id),
             })
         else:
-            # Auto-approve
-            member = GroupMember.objects.create(
+            GroupMember.objects.create(
                 group=group,
                 user=request.user,
                 role='member',
@@ -124,7 +122,10 @@ class GroupViewSet(viewsets.ModelViewSet):
             )
             group.total_members += 1
             group.save()
-            return Response({'detail': 'Successfully joined group'})
+            return Response({
+                'detail': 'Successfully joined group',
+                'status': 'approved',
+            })
 
     @action(detail=True, methods=['post'])
     def leave(self, request, slug=None):

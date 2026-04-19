@@ -83,14 +83,21 @@ class GroupSerializer(serializers.ModelSerializer):
 
 
 class GroupListSerializer(serializers.ModelSerializer):
-    """Minimal group info for lists"""
+    """Group info for lists - includes membership status"""
+    created_by = UserListSerializer(read_only=True)
     is_member = serializers.SerializerMethodField()
+    member_status = serializers.SerializerMethodField()
+    member_role = serializers.SerializerMethodField()
+    pending_requests_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Group
         fields = [
-            'id', 'name', 'slug', 'icon', 'category',
-            'total_members', 'total_posts', 'is_member'
+            'id', 'name', 'slug', 'description', 'icon', 'cover_image',
+            'category', 'total_members', 'total_posts', 'is_active',
+            'require_approval', 'max_images_per_post', 'max_videos_per_post',
+            'message_retention_days', 'created_by', 'created_at',
+            'is_member', 'member_status', 'member_role', 'pending_requests_count',
         ]
 
     def get_is_member(self, obj):
@@ -102,6 +109,48 @@ class GroupListSerializer(serializers.ModelSerializer):
                 status='approved'
             ).exists()
         return False
+
+    def get_member_status(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            try:
+                member = GroupMember.objects.get(group=obj, user=request.user)
+                return member.status
+            except GroupMember.DoesNotExist:
+                return None
+        return None
+
+    def get_member_role(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            try:
+                member = GroupMember.objects.get(
+                    group=obj,
+                    user=request.user,
+                    status='approved'
+                )
+                return member.role
+            except GroupMember.DoesNotExist:
+                return None
+        return None
+
+    def get_pending_requests_count(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            try:
+                member = GroupMember.objects.get(
+                    group=obj,
+                    user=request.user,
+                    status='approved'
+                )
+                if member.is_admin():
+                    return GroupJoinRequest.objects.filter(
+                        group=obj,
+                        status='pending'
+                    ).count()
+            except GroupMember.DoesNotExist:
+                pass
+        return 0
 
 
 class GroupMemberSerializer(serializers.ModelSerializer):

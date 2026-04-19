@@ -52,6 +52,6 @@ if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
 # Custom admin site configuration
-admin.site.site_header = "Muslim Community Admin"
-admin.site.site_title = "Muslim Community Admin Portal"
-admin.site.index_title = "Welcome to Muslim Community Administration"
+admin.site.site_header = "NYJA Admin"
+admin.site.site_title = "NYJA Admin Portal"
+admin.site.index_title = "Welcome to NYJA Administration"
