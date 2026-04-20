@@ -17,6 +17,10 @@ class BusinessCategorySerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'slug']
 
 class BusinessCreateSerializer(serializers.ModelSerializer):
+    # Bëji opsionale
+    phone = serializers.CharField(required=False, allow_blank=True, default='')
+    email = serializers.EmailField(required=False, allow_null=True, default=None)
+
     class Meta:
         model = Business
         fields = [
@@ -27,21 +31,27 @@ class BusinessCreateSerializer(serializers.ModelSerializer):
             'social_instagram', 'social_facebook', 'is_primary'
         ]
 
+    def validate(self, attrs):
+        # Biznesi duhet të ketë të paktën një kontakt
+        phone = attrs.get('phone', '')
+        email = attrs.get('email')
+        if not phone and not email:
+            raise serializers.ValidationError(
+                {'phone': 'Vendosni të paktën email ose numër telefoni.'}
+            )
+        return attrs
+
     def create(self, validated_data):
         user = self.context['request'].user
         if user.user_type != 'business':
-            raise serializers.ValidationError("Only business owners can create a business profile")
-
-        # if hasattr(user, 'business'):
-        #     raise serializers.ValidationError("User already has a business profile")
-
+            raise serializers.ValidationError(
+                "Vetëm pronarët e bizneseve mund të krijojnë profil biznesi."
+            )
         validated_data['user'] = user
         return super().create(validated_data)
 
     def to_representation(self, instance):
-        """Return full business detail after creation"""
         return BusinessDetailSerializer(instance, context=self.context).data
-
 
 class BusinessDetailSerializer(serializers.ModelSerializer):
     owner = UserListSerializer(source='user', read_only=True)
