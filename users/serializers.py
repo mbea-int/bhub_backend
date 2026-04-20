@@ -1,10 +1,66 @@
+# users/serializers.py
+
 from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
 from .models import User, BlockedUser
 from core.services.cloudinary_service import CloudinaryService
 import logging
+import re
 
 logger = logging.getLogger(__name__)
+
+
+def normalize_phone(value):
+    """
+    Normalizon numrin e telefonit:
+    - 068... → +355 68...
+    - 06x... → +355 6x...
+    - +355... → mbetet
+    - Heq hapësirat, vizat
+    """
+    if not value:
+        return None
+
+    # Pastro hapësirat dhe vizat
+    cleaned = re.sub(r'[\s\-\(\)]+', '', value.strip())
+
+    if not cleaned:
+        return None
+
+    # Nëse fillon me 0 (format shqiptar lokal)
+    if cleaned.startswith('0') and not cleaned.startswith('00'):
+        cleaned = '+355' + cleaned[1:]
+
+    # Nëse fillon me 00355
+    if cleaned.startswith('00355'):
+        cleaned = '+355' + cleaned[5:]
+
+    # Nëse nuk ka prefix, supozo shqiptar
+    if not cleaned.startswith('+'):
+        # Nëse duket si numër shqiptar (fillon me 6)
+        if cleaned.startswith('6') and len(cleaned) >= 8:
+            cleaned = '+355' + cleaned
+        else:
+            cleaned = '+' + cleaned
+
+    return cleaned
+
+
+def validate_phone_number(value):
+    """Validon numrin e telefonit pas normalizimit"""
+    if not value:
+        return
+
+    normalized = normalize_phone(value)
+    if not normalized:
+        return
+
+    # Kontrollo formatin bazë: + pastaj numra, min 10 karaktere
+    if not re.match(r'^\+\d{10,15}$', normalized):
+        raise serializers.ValidationError(
+            'Numri i telefonit nuk është i vlefshëm. '
+            'Mund të shkruani 068..., +355 68..., ose formatin ndërkombëtar.'
+        )
 
 
 class CloudinaryImageField(serializers.Field):
@@ -27,7 +83,6 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
     referral_code_used = serializers.CharField(
         write_only=True, required=False, allow_blank=True
     )
-    # Username opsional — mund të përdoret për login
     username = serializers.CharField(
         required=False,
         allow_blank=True,
@@ -35,7 +90,6 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         min_length=3,
         max_length=50
     )
-    # Email opsional për regular, i rekomanduar për biznes
     email = serializers.EmailField(required=False, allow_blank=True, allow_null=True)
 
     class Meta:
@@ -51,8 +105,6 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         value = value.strip().lower()
         if User.objects.filter(username__iexact=value).exists():
             raise serializers.ValidationError('Ky username është i zënë.')
-        # Lejo vetëm shkronja, numra, nënvija
-        import re
         if not re.match(r'^[a-zA-Z0-9_]+$', value):
             raise serializers.ValidationError(
                 'Username mund të ketë vetëm shkronja, numra dhe nënvija (_).'
@@ -67,6 +119,13 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('Ky email është i regjistruar tashmë.')
         return value
 
+    def validate_phone(self, value):
+        if not value or not value.strip():
+            return None
+        normalized = normalize_phone(value)
+        validate_phone_number(value)
+        return normalized
+
     def validate(self, attrs):
         password = attrs.get('password')
         password_confirm = attrs.get('password_confirm')
@@ -75,19 +134,16 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         username = attrs.get('username')
         phone = attrs.get('phone')
 
-        # Fjalëkalimet
         if password != password_confirm:
             raise serializers.ValidationError(
                 {'password': 'Fjalëkalimet nuk përputhen.'}
             )
 
-        # Rregull 1: Çdo user duhet email OSE username
         if not email and not username:
             raise serializers.ValidationError(
                 {'email': 'Duhet të vendosni email ose username.'}
             )
 
-        # Rregull 2: Bizneset duhet email OSE phone
         if user_type == 'business' and not email and not phone:
             raise serializers.ValidationError(
                 {'phone': 'Bizneset duhet të kenë email ose numër telefoni.'}
@@ -100,7 +156,6 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         referral_code = validated_data.pop('referral_code_used', None)
         password = validated_data.pop('password')
 
-        # Pastro fushat boshe
         email = validated_data.get('email') or None
         username = validated_data.get('username') or None
 
@@ -170,13 +225,33 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
 class UserUpdateSerializer(serializers.ModelSerializer):
     profile_image = CloudinaryImageField(required=False, allow_null=True)
+    email = serializers.EmailField(required=False, allow_null=True, allow_blank=True)
 
     class Meta:
         model = User
         fields = [
-            'full_name', 'username', 'phone', 'bio',
+            'full_name', 'username', 'email', 'phone', 'bio',
             'profile_image', 'language', 'profile_visibility'
         ]
+
+    def validate_email(self, value):
+        if not value or not value.strip():
+            return None
+
+        value = value.strip().lower()
+        user = self.instance
+
+        # Nëse nuk ka ndryshuar
+        if user and user.email and user.email.lower() == value:
+            return value
+
+        # Kontrollo unikalitetin
+        if User.objects.filter(email__iexact=value).exclude(
+            pk=user.pk if user else None
+        ).exists():
+            raise serializers.ValidationError('Ky email është i regjistruar tashmë.')
+
+        return value
 
     def validate_username(self, value):
         if not value:
@@ -185,11 +260,9 @@ class UserUpdateSerializer(serializers.ModelSerializer):
         value = value.strip().lower()
         user = self.instance
 
-        # Kontrollo nëse po ndryshon (jo vetëm konfirmon të njëjtin)
         if user and user.username and user.username == value:
-            return value  # S'ka ndryshim, kalon pa problem
+            return value
 
-        # Kontrollo kufizimin 30-ditor
         if user and user.username_changed_at:
             from django.utils import timezone
             days_since = (timezone.now() - user.username_changed_at).days
@@ -199,14 +272,11 @@ class UserUpdateSerializer(serializers.ModelSerializer):
                     f'Username mund të ndryshohet pas {remaining} ditësh.'
                 )
 
-        # Kontrollo unikalitetin
         if User.objects.filter(username__iexact=value).exclude(
             pk=user.pk if user else None
         ).exists():
             raise serializers.ValidationError('Ky username është i zënë.')
 
-        # Kontrollo formatin
-        import re
         if not re.match(r'^[a-zA-Z0-9_]+$', value):
             raise serializers.ValidationError(
                 'Username mund të ketë vetëm shkronja, numra dhe nënvija (_).'
@@ -220,11 +290,11 @@ class UserUpdateSerializer(serializers.ModelSerializer):
         return value
 
     def validate_phone(self, value):
-        if value and not value.startswith('+'):
-            raise serializers.ValidationError(
-                'Numri duhet të përfshijë kodin e vendit (+355...)'
-            )
-        return value
+        if not value or not value.strip():
+            return None
+        normalized = normalize_phone(value)
+        validate_phone_number(value)
+        return normalized
 
     def update(self, instance, validated_data):
         # Nëse username po ndryshon, ruaj timestamp-in
@@ -233,7 +303,22 @@ class UserUpdateSerializer(serializers.ModelSerializer):
             from django.utils import timezone
             validated_data['username_changed_at'] = timezone.now()
 
+        # Nëse email po ndryshon, flag-o si jo-verified
+        new_email = validated_data.get('email')
+        if new_email and new_email != instance.email:
+            validated_data['is_email_verified'] = False
+
         return super().update(instance, validated_data)
+
+
+class UpgradeEligibilitySerializer(serializers.Serializer):
+    """Serializer për përgjigjen e eligibility check"""
+    eligible = serializers.BooleanField()
+    has_email = serializers.BooleanField()
+    has_phone = serializers.BooleanField()
+    requirements_met = serializers.BooleanField()
+    missing = serializers.ListField(child=serializers.CharField(), required=False)
+    message = serializers.CharField(required=False)
 
 
 class UserListSerializer(serializers.ModelSerializer):

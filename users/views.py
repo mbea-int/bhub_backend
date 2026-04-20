@@ -1,3 +1,5 @@
+# users/views.py
+
 from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -29,10 +31,8 @@ class UserViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         public_actions = ['create', 'guest_login']
-
         if self.action in public_actions:
             return [permissions.AllowAny()]
-
         return [permissions.IsAuthenticated()]
 
     @method_decorator(ratelimit(key='ip', rate='5/15m', method='POST'))
@@ -40,10 +40,8 @@ class UserViewSet(viewsets.ModelViewSet):
         """Register new user"""
         data = request.data.copy()
 
-        # Handle profile image if provided during registration
         if 'profile_image' in data and data['profile_image']:
             if not data['profile_image'].startswith('http'):
-                # Upload to Cloudinary
                 image_result = CloudinaryService.upload_user_profile_image(
                     data['profile_image'],
                     data.get('email', 'user')
@@ -59,7 +57,6 @@ class UserViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
 
-        # Generate JWT tokens
         refresh = RefreshToken.for_user(user)
 
         return Response({
@@ -82,22 +79,18 @@ class UserViewSet(viewsets.ModelViewSet):
         user = request.user
         data = request.data.copy()
 
-        # Handle profile image upload
         if 'profile_image' in data and data['profile_image']:
-            # Check if it's a new image (not already a URL)
             if not data['profile_image'].startswith('http'):
                 try:
-                    # Delete old image if exists and is from Cloudinary
                     if user.profile_image and 'cloudinary' in user.profile_image:
                         old_public_id = self._extract_public_id(user.profile_image)
                         if old_public_id:
                             CloudinaryService.delete_image(old_public_id)
                             logger.info(f"Deleted old profile image: {old_public_id}")
 
-                    # Upload new image
                     image_result = CloudinaryService.upload_user_profile_image(
                         data['profile_image'],
-                        user.email
+                        user.email or str(user.id)
                     )
 
                     if image_result:
@@ -120,7 +113,21 @@ class UserViewSet(viewsets.ModelViewSet):
         if serializer.is_valid():
             serializer.save()
             return Response(UserProfileSerializer(user).data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        # Kthe gabime të formatuara mirë
+        errors = serializer.errors
+        error_messages = []
+        for field, messages in errors.items():
+            for msg in messages:
+                error_messages.append(f"{field}: {msg}")
+
+        return Response(
+            {
+                'error': '; '.join(error_messages),
+                'field_errors': errors
+            },
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
     @action(detail=False, methods=['delete'])
     def delete_profile_image(self, request):
@@ -129,17 +136,14 @@ class UserViewSet(viewsets.ModelViewSet):
 
         if user.profile_image:
             try:
-                # Delete from Cloudinary if it's a Cloudinary URL
                 if 'cloudinary' in user.profile_image:
                     public_id = self._extract_public_id(user.profile_image)
                     if public_id:
                         CloudinaryService.delete_image(public_id)
                         logger.info(f"Deleted profile image: {public_id}")
 
-                # Clear the profile image field
                 user.profile_image = None
                 user.save()
-
                 return Response({'detail': 'Profile image deleted successfully'})
             except Exception as e:
                 logger.error(f"Error deleting profile image: {str(e)}")
@@ -158,23 +162,54 @@ class UserViewSet(viewsets.ModelViewSet):
                 {'error': 'No image provided'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-
-        # Use the update_profile method with only image data
         return self.update_profile(request)
 
-    # @action(detail=False, methods=['post'])
-    # def upgrade_to_business(self, request):
-    #     """Upgrade regular user to business owner"""
-    #     user = request.user
-    #     if user.user_type == 'business':
-    #         return Response(
-    #             {'detail': 'Already a business owner'},
-    #             status=status.HTTP_400_BAD_REQUEST
-    #         )
-    #
-    #     user.user_type = 'business'
-    #     user.save()
-    #     return Response({'detail': 'Successfully upgraded to business owner'})
+    # ─── UPGRADE ELIGIBILITY CHECK ───
+    @action(detail=False, methods=['get'], url_path='upgrade-eligibility')
+    def upgrade_eligibility(self, request):
+        """Check if user meets requirements to upgrade to business"""
+        user = request.user
+
+        if user.user_type == 'business':
+            return Response({
+                'eligible': False,
+                'has_email': bool(user.email),
+                'has_phone': bool(user.phone),
+                'requirements_met': True,
+                'missing': [],
+                'message': 'Jeni tashmë pronar biznesi.'
+            })
+
+        if user.user_type == 'guest':
+            return Response({
+                'eligible': False,
+                'has_email': False,
+                'has_phone': False,
+                'requirements_met': False,
+                'missing': ['account'],
+                'message': 'Vizitorët nuk mund të bëhen pronarë biznesi. Regjistrohuni fillimisht.'
+            })
+
+        has_email = bool(user.email)
+        has_phone = bool(user.phone)
+        has_contact = has_email or has_phone
+
+        missing = []
+        if not has_email and not has_phone:
+            missing.append('email_or_phone')
+
+        return Response({
+            'eligible': has_contact,
+            'has_email': has_email,
+            'has_phone': has_phone,
+            'requirements_met': has_contact,
+            'missing': missing,
+            'message': (
+                'Plotësoni të paktën email ose numër telefoni para se të bëheni pronar biznesi.'
+                if not has_contact else
+                'Plotësoni kërkesat. Mund të vazhdoni me upgrade.'
+            )
+        })
 
     @action(detail=False, methods=['post'], permission_classes=[permissions.IsAuthenticated])
     def upgrade_to_business(self, request):
@@ -182,40 +217,49 @@ class UserViewSet(viewsets.ModelViewSet):
         try:
             if user.user_type == 'business':
                 return Response(
-                    {'detail': 'Already a business owner'},
+                    {'detail': 'Jeni tashmë pronar biznesi.'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             if user.user_type == 'guest':
                 return Response(
-                    {'detail': 'Guest users cannot become business owners'},
+                    {'detail': 'Vizitorët nuk mund të bëhen pronarë biznesi.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # CHECK: Duhet email ose phone
+            if not user.email and not user.phone:
+                return Response(
+                    {
+                        'detail': 'Duhet të keni të paktën email ose numër telefoni para se të bëheni pronar biznesi.',
+                        'code': 'missing_contact',
+                        'missing': ['email_or_phone']
+                    },
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
             user.user_type = 'business'
             user.save()
 
-            # Serializo me try/except të ndarë
             try:
                 serializer = UserProfileSerializer(user, context={'request': request})
                 user_data = serializer.data
             except Exception as se:
                 logger.error(f"Serialization error after upgrade: {str(se)}", exc_info=True)
-                # Kthe sukses edhe pa serializer nëse dështon aty
                 return Response({
-                    'detail': 'Successfully upgraded to business owner',
-                    'serialization_error': str(se)
+                    'detail': 'U ngrit me sukses në pronar biznesi.',
+                    'user': {'id': str(user.id), 'user_type': 'business'}
                 }, status=status.HTTP_200_OK)
 
             logger.info(f"User {user.email or user.username} upgraded to business owner")
             return Response({
-                'detail': 'Successfully upgraded to business owner',
+                'detail': 'U ngrit me sukses në pronar biznesi.',
                 'user': user_data
             }, status=status.HTTP_200_OK)
 
         except Exception as e:
             logger.error(f"Upgrade error for user {request.user.id}: {str(e)}", exc_info=True)
             return Response(
-                {'detail': f'Server error: {str(e)}'},
+                {'detail': f'Gabim serveri: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
@@ -226,33 +270,30 @@ class UserViewSet(viewsets.ModelViewSet):
 
         if user.user_type != 'business':
             return Response(
-                {'detail': 'User is not a business owner'},
+                {'detail': 'Nuk jeni pronar biznesi.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Check if user has active businesses
         active_businesses = user.businesses.count()
         if active_businesses > 0:
             return Response(
                 {
-                    'detail': 'Cannot downgrade while you have active businesses',
+                    'detail': 'Nuk mund të zbriteni ndërsa keni biznese aktive.',
                     'active_businesses': active_businesses,
-                    'message': 'Please delete all businesses before downgrading'
+                    'message': 'Ju lutem fshini të gjitha bizneset para se të zbriteni.'
                 },
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Downgrade user
         user.user_type = 'regular'
         user.save()
 
-        # Return updated user data
         user_serializer = UserProfileSerializer(user)
 
-        logger.info(f"User {user.email} downgraded to regular user")
+        logger.info(f"User {user.email or user.username} downgraded to regular user")
 
         return Response({
-            'detail': 'Successfully downgraded to regular user',
+            'detail': 'U zbrit me sukses në përdorues standard.',
             'user': user_serializer.data
         }, status=status.HTTP_200_OK)
 
@@ -304,13 +345,9 @@ class UserViewSet(viewsets.ModelViewSet):
     def _extract_public_id(self, cloudinary_url):
         """Extract public_id from Cloudinary URL"""
         try:
-            # Example URL: https://res.cloudinary.com/demo/image/upload/v1234/folder/public_id.jpg
             parts = cloudinary_url.split('/')
-            # Find the upload index
             upload_index = parts.index('upload')
-            # Get everything after version (v1234)
             public_id_with_ext = '/'.join(parts[upload_index + 2:])
-            # Remove file extension
             public_id = public_id_with_ext.rsplit('.', 1)[0]
             return public_id
         except Exception as e:
@@ -327,22 +364,13 @@ class UserViewSet(viewsets.ModelViewSet):
         return Response({
             'original': user.profile_image,
             'thumbnail': CloudinaryService.get_optimized_url(
-                user.profile_image,
-                width=150,
-                height=150,
-                crop='fill'
+                user.profile_image, width=150, height=150, crop='fill'
             ),
             'medium': CloudinaryService.get_optimized_url(
-                user.profile_image,
-                width=400,
-                height=400,
-                crop='fill'
+                user.profile_image, width=400, height=400, crop='fill'
             ),
             'large': CloudinaryService.get_optimized_url(
-                user.profile_image,
-                width=800,
-                height=800,
-                crop='fill'
+                user.profile_image, width=800, height=800, crop='fill'
             )
         })
 
@@ -354,31 +382,25 @@ class UserViewSet(viewsets.ModelViewSet):
         import secrets
 
         try:
-            # Check if create_guest_user exists in UserManager
             if hasattr(User.objects, 'create_guest_user'):
                 guest_user = User.objects.create_guest_user()
             else:
-                # Fallback - create manually
                 guest_email = f"guest_{secrets.token_hex(8)}@temp.local"
                 guest_user = User(
                     email=guest_email,
                     full_name="Vizitor",
-                    user_type='regular',  # ose 'guest' nëse e ke
+                    user_type='regular',
                     is_active=True,
                 )
-                # Set guest flag if field exists
                 if hasattr(guest_user, 'is_guest'):
                     guest_user.is_guest = True
-
                 guest_user.set_unusable_password()
                 guest_user.save()
 
-            # Set expiration if field exists
             if hasattr(guest_user, 'guest_expires_at'):
                 guest_user.guest_expires_at = timezone.now() + timedelta(days=7)
                 guest_user.save()
 
-            # Generate token
             refresh = RefreshToken.for_user(guest_user)
 
             return Response({
@@ -388,8 +410,7 @@ class UserViewSet(viewsets.ModelViewSet):
                     'access': str(refresh.access_token),
                 },
                 'is_guest': True,
-                'expires_at': guest_user.guest_expires_at.isoformat() if hasattr(guest_user,
-                                                                                 'guest_expires_at') else None
+                'expires_at': guest_user.guest_expires_at.isoformat() if hasattr(guest_user, 'guest_expires_at') else None
             }, status=status.HTTP_201_CREATED)
 
         except Exception as e:
