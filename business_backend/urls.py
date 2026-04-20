@@ -7,6 +7,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 # Import all viewsets
 from users.views import UserViewSet
+from users.token_views import CustomTokenObtainPairView
 from businesses.views import BusinessViewSet, BusinessCategoryViewSet
 from posts.views import PostViewSet, ProductCategoryViewSet
 from reviews.views import InquiryViewSet, ReviewViewSet
@@ -37,7 +38,8 @@ urlpatterns = [
     path('admin/', admin.site.urls),
 
     # JWT Authentication
-    path('api/auth/login/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    # path('api/auth/login/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('api/auth/login/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/auth/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 
     # API Routes

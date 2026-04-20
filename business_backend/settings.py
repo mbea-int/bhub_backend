@@ -209,6 +209,10 @@ SIMPLE_JWT = {
     'TOKEN_TYPE_CLAIM': 'token_type',
 }
 
+AUTHENTICATION_BACKENDS = [
+    'users.backends.EmailOrUsernameBackend',  # I ri
+    'django.contrib.auth.backends.ModelBackend',  # Fallback
+]
 # CORS Settings
 if DEBUG and NGROK_URL:
     cors_origins = [

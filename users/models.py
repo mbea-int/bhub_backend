@@ -2,6 +2,7 @@ import uuid
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+from django.core.exceptions import ValidationError
 import random
 import string
 
@@ -10,10 +11,9 @@ class UserManager(BaseUserManager):
     def active_users(self):
         return self.filter(is_active=True, is_banned=False)
 
-    def create_user(self, email, full_name, password=None, **extra_fields):
-        if not email:
-            raise ValueError("The Email field must be set")
-        email = self.normalize_email(email)
+    def create_user(self, email=None, full_name='', password=None, **extra_fields):
+        if email:
+            email = self.normalize_email(email)
         user = self.model(email=email, full_name=full_name, **extra_fields)
         user.set_password(password)
         user.save(using=self._db)
@@ -23,16 +23,9 @@ class UserManager(BaseUserManager):
         extra_fields.setdefault('is_staff', True)
         extra_fields.setdefault('is_superuser', True)
         extra_fields.setdefault('is_active', True)
-
-        if extra_fields.get('is_staff') is not True:
-            raise ValueError('Superuser must have is_staff=True.')
-        if extra_fields.get('is_superuser') is not True:
-            raise ValueError('Superuser must have is_superuser=True.')
-
         return self.create_user(email, full_name, password, **extra_fields)
 
     def create_guest_user(self):
-        """Create a temporary guest user"""
         import secrets
         guest_email = f"guest_{secrets.token_hex(8)}@temp.local"
         guest = self.model(
@@ -43,9 +36,6 @@ class UserManager(BaseUserManager):
             is_guest=True
         )
         guest.set_unusable_password()
-        # Set guest flag if field exists
-        if hasattr(guest, 'is_guest'):
-            guest.is_guest = True
         guest.save(using=self._db)
         return guest
 
@@ -68,8 +58,19 @@ class User(AbstractUser):
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    username = None  # Remove username field
-    email = models.EmailField(_('email address'), unique=True)
+    username = models.CharField(
+        max_length=50,
+        unique=True,
+        null=True,
+        blank=True,
+        help_text='Opsional. Mund të përdoret për login.'
+    )
+    email = models.EmailField(
+        _('email address'),
+        unique=True,
+        null=True,
+        blank=True
+    )
     full_name = models.CharField(max_length=255)
     phone = models.CharField(max_length=20, blank=True, null=True)
     bio = models.TextField(blank=True, null=True)
@@ -86,7 +87,10 @@ class User(AbstractUser):
     ban_reason = models.TextField(blank=True, null=True)
 
     referral_code = models.CharField(max_length=20, unique=True, editable=False)
-    referred_by = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='referrals')
+    referred_by = models.ForeignKey(
+        'self', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='referrals'
+    )
 
     language = models.CharField(max_length=10, choices=LANGUAGE_CHOICES, default='sq')
     profile_visibility = models.CharField(max_length=20, choices=VISIBILITY_CHOICES, default='public')
@@ -103,9 +107,39 @@ class User(AbstractUser):
     class Meta:
         db_table = 'users'
         ordering = ['-created_at']
+        constraints = [
+            # Business users: duhet email ose phone
+            models.CheckConstraint(
+                check=(
+                    ~models.Q(user_type='business') |
+                    models.Q(email__isnull=False) |
+                    models.Q(phone__isnull=False)
+                ),
+                name='business_requires_email_or_phone'
+            ),
+            # Çdo user duhet të ketë email ose username
+            models.CheckConstraint(
+                check=(
+                    models.Q(email__isnull=False) |
+                    models.Q(username__isnull=False)
+                ),
+                name='user_requires_email_or_username'
+            ),
+        ]
 
     def __str__(self):
-        return self.email
+        return self.email or self.username or str(self.id)
+
+    def clean(self):
+        super().clean()
+        if self.user_type == 'business' and not self.email and not self.phone:
+            raise ValidationError(
+                'Bizneset duhet të kenë të paktën email ose numër telefoni.'
+            )
+        if not self.email and not self.username:
+            raise ValidationError(
+                'Duhet të vendosni të paktën email ose username.'
+            )
 
     def save(self, *args, **kwargs):
         if not self.referral_code:
@@ -118,22 +152,29 @@ class User(AbstractUser):
 
     @property
     def primary_business(self):
-        """Get user's primary business"""
         return self.businesses.filter(is_primary=True).first()
 
     @property
     def total_businesses(self):
         return self.businesses.count()
 
+    @property
+    def can_make_inquiry(self):
+        """Regular users duhet email ose phone për inquiry"""
+        if self.user_type == 'guest':
+            return False
+        if self.user_type == 'business':
+            return True
+        # Regular: duhet të paktën email ose phone
+        return bool(self.email or self.phone)
+
     @staticmethod
     def generate_referral_code():
-        """Generate unique referral code"""
         while True:
             code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
             if not User.objects.filter(referral_code=code).exists():
                 return code
 
-    # Metodë për guest cleanup:
     @classmethod
     def cleanup_expired_guests(cls):
         from django.utils import timezone
@@ -144,7 +185,6 @@ class User(AbstractUser):
         count = expired.count()
         expired.delete()
         return count
-
 
 
 class BlockedUser(models.Model):
@@ -159,7 +199,7 @@ class BlockedUser(models.Model):
         ordering = ['-created_at']
 
     def __str__(self):
-        return f"{self.blocker.email} blocked {self.blocked.email}"
+        return f"{self.blocker} blocked {self.blocked}"
 
 
 class OAuthToken(models.Model):
