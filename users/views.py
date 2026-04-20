@@ -178,35 +178,46 @@ class UserViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'], permission_classes=[permissions.IsAuthenticated])
     def upgrade_to_business(self, request):
-        """Upgrade user to business owner"""
         user = request.user
+        try:
+            if user.user_type == 'business':
+                return Response(
+                    {'detail': 'Already a business owner'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if user.user_type == 'guest':
+                return Response(
+                    {'detail': 'Guest users cannot become business owners'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
-        # Validations
-        if user.user_type == 'business':
+            user.user_type = 'business'
+            user.save()
+
+            # Serializo me try/except të ndarë
+            try:
+                serializer = UserProfileSerializer(user, context={'request': request})
+                user_data = serializer.data
+            except Exception as se:
+                logger.error(f"Serialization error after upgrade: {str(se)}", exc_info=True)
+                # Kthe sukses edhe pa serializer nëse dështon aty
+                return Response({
+                    'detail': 'Successfully upgraded to business owner',
+                    'serialization_error': str(se)
+                }, status=status.HTTP_200_OK)
+
+            logger.info(f"User {user.email or user.username} upgraded to business owner")
+            return Response({
+                'detail': 'Successfully upgraded to business owner',
+                'user': user_data
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.error(f"Upgrade error for user {request.user.id}: {str(e)}", exc_info=True)
             return Response(
-                {'detail': 'Already a business owner'},
-                status=status.HTTP_400_BAD_REQUEST
+                {'detail': f'Server error: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-
-        if user.user_type == 'guest':
-            return Response(
-                {'detail': 'Guest users cannot become business owners'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # Upgrade user
-        user.user_type = 'business'
-        user.save()
-
-        # Return updated user data
-        user_serializer = UserProfileSerializer(user)
-
-        logger.info(f"User {user.email} upgraded to business owner")
-
-        return Response({
-            'detail': 'Successfully upgraded to business owner',
-            'user': user_serializer.data
-        }, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=['post'], permission_classes=[permissions.IsAuthenticated])
     def downgrade_to_regular(self, request):
