@@ -65,6 +65,7 @@ class User(AbstractUser):
         blank=True,
         help_text='Opsional. Mund të përdoret për login.'
     )
+    username_changed_at = models.DateTimeField(blank=True, null=True)
     email = models.EmailField(
         _('email address'),
         unique=True,

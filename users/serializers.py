@@ -181,21 +181,59 @@ class UserUpdateSerializer(serializers.ModelSerializer):
     def validate_username(self, value):
         if not value:
             return None
+
         value = value.strip().lower()
         user = self.instance
-        if User.objects.filter(username__iexact=value).exclude(pk=user.pk).exists():
+
+        # Kontrollo nëse po ndryshon (jo vetëm konfirmon të njëjtin)
+        if user and user.username and user.username == value:
+            return value  # S'ka ndryshim, kalon pa problem
+
+        # Kontrollo kufizimin 30-ditor
+        if user and user.username_changed_at:
+            from django.utils import timezone
+            days_since = (timezone.now() - user.username_changed_at).days
+            if days_since < 30:
+                remaining = 30 - days_since
+                raise serializers.ValidationError(
+                    f'Username mund të ndryshohet pas {remaining} ditësh.'
+                )
+
+        # Kontrollo unikalitetin
+        if User.objects.filter(username__iexact=value).exclude(
+            pk=user.pk if user else None
+        ).exists():
             raise serializers.ValidationError('Ky username është i zënë.')
+
+        # Kontrollo formatin
         import re
         if not re.match(r'^[a-zA-Z0-9_]+$', value):
             raise serializers.ValidationError(
                 'Username mund të ketë vetëm shkronja, numra dhe nënvija (_).'
             )
+
+        if len(value) < 3:
+            raise serializers.ValidationError(
+                'Username duhet të ketë të paktën 3 karaktere.'
+            )
+
         return value
 
     def validate_phone(self, value):
         if value and not value.startswith('+'):
-            raise serializers.ValidationError('Numri duhet të përfshijë kodin e vendit (+355...)')
+            raise serializers.ValidationError(
+                'Numri duhet të përfshijë kodin e vendit (+355...)'
+            )
         return value
+
+    def update(self, instance, validated_data):
+        # Nëse username po ndryshon, ruaj timestamp-in
+        new_username = validated_data.get('username')
+        if new_username and new_username != instance.username:
+            from django.utils import timezone
+            validated_data['username_changed_at'] = timezone.now()
+
+        return super().update(instance, validated_data)
 
 
 class UserListSerializer(serializers.ModelSerializer):
