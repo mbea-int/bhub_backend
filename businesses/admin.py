@@ -6,30 +6,39 @@ from .models import Business, BusinessCategory, Follower, Subscriber, BusinessAn
 
 @admin.register(BusinessCategory)
 class BusinessCategoryAdmin(admin.ModelAdmin):
-    list_display = ['name', 'slug', 'icon', 'is_active', 'created_at']
+    list_display = ['name', 'slug', 'icon', 'is_active', 'total_businesses', 'created_at']  # 👈 shtu total_businesses
     list_filter = ['is_active', 'created_at']
     search_fields = ['name', 'description']
     prepopulated_fields = {'slug': ('name',)}
 
     def get_queryset(self, request):
-        queryset = super().get_queryset(request)
-        return queryset.annotate(
+        return super().get_queryset(request).annotate(
             total_businesses=Count('businesses')
         )
 
+    def total_businesses(self, obj):  # 👈 mungonte metoda
+        return obj.total_businesses
+    total_businesses.short_description = 'Biznese'
+    total_businesses.admin_order_field = 'total_businesses'
+
+
 @admin.register(Business)
 class BusinessAdmin(admin.ModelAdmin):
-    list_display = ['business_name', 'user_email', 'category', 'city', 'is_verified', 'is_premium', 'average_rating',
-                    'total_followers']
-    list_filter = ['category', 'city', 'is_verified', 'is_premium', 'verification_status', 'created_at']
+    list_display = [
+        'business_name', 'user_email', 'category', 'city',
+        'is_primary', 'is_verified', 'is_premium', 'average_rating', 'total_followers'
+    ]
+    list_filter = ['category', 'city', 'is_primary', 'is_verified', 'is_premium', 'verification_status', 'created_at']
     search_fields = ['business_name', 'user__email', 'city', 'phone']
     ordering = ['-created_at']
-    readonly_fields = ['slug', 'total_followers', 'total_subscribers', 'average_rating', 'total_reviews', 'created_at',
-                       'updated_at']
+    readonly_fields = [
+        'slug', 'total_followers', 'total_subscribers',
+        'average_rating', 'total_reviews', 'created_at', 'updated_at'
+    ]
 
     fieldsets = (
         ('Basic Info', {
-            'fields': ('user', 'business_name', 'slug', 'description', 'category', 'logo', 'logo_public_id')
+            'fields': ('user', 'business_name', 'slug', 'description', 'category', 'is_primary', 'logo', 'logo_public_id')  # 👈 shtu is_primary
         }),
         ('Contact', {
             'fields': ('phone', 'email', 'address', 'city', 'country')
@@ -50,10 +59,10 @@ class BusinessAdmin(admin.ModelAdmin):
             'fields': ('total_followers', 'total_subscribers', 'average_rating', 'total_reviews')
         }),
         ('Certification', {
-            'fields': ('is_halal_certified', 'halal_certificate')
+            'fields': ('is_halal_certified', 'halal_certificate', 'halal_certificate_public_id')  # 👈 shtu public_id
         }),
         ('Social', {
-            'fields': ('social_instagram', 'social_facebook')
+            'fields': ('social_instagram', 'social_facebook', 'website')  # 👈 shtu website
         }),
         ('Dates', {
             'fields': ('created_at', 'updated_at')
@@ -64,20 +73,17 @@ class BusinessAdmin(admin.ModelAdmin):
 
     def user_email(self, obj):
         return obj.user.email
-
     user_email.short_description = 'Owner Email'
 
     def verify_businesses(self, request, queryset):
         from django.utils import timezone
         queryset.update(is_verified=True, verification_status='approved', verification_date=timezone.now())
         self.message_user(request, f'{queryset.count()} businesses verified')
-
     verify_businesses.short_description = 'Verify selected businesses'
 
     def reject_businesses(self, request, queryset):
         queryset.update(is_verified=False, verification_status='rejected')
         self.message_user(request, f'{queryset.count()} businesses rejected')
-
     reject_businesses.short_description = 'Reject selected businesses'
 
     def make_premium(self, request, queryset):
@@ -85,13 +91,11 @@ class BusinessAdmin(admin.ModelAdmin):
         from datetime import timedelta
         queryset.update(is_premium=True, premium_until=timezone.now() + timedelta(days=30))
         self.message_user(request, f'{queryset.count()} businesses made premium')
-
     make_premium.short_description = 'Make selected businesses premium (30 days)'
 
     def remove_premium(self, request, queryset):
         queryset.update(is_premium=False, premium_until=None)
         self.message_user(request, f'{queryset.count()} businesses removed from premium')
-
     remove_premium.short_description = 'Remove premium status'
 
 
