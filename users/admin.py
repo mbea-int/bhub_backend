@@ -9,11 +9,12 @@ from .models import User, BlockedUser, OAuthToken
 class UserAdmin(BaseUserAdmin):
     list_display = [
         'email', 'username', 'full_name', 'user_type',
-        'is_email_verified', 'is_guest', 'is_banned', 'is_active', 'created_at'
+        'is_email_verified', 'is_phone_verified',  # 👈 shtu
+        'is_guest', 'is_banned', 'is_active', 'created_at'
     ]
     list_filter = [
-        'user_type', 'is_email_verified', 'is_guest',
-        'is_banned', 'is_active', 'language', 'profile_visibility',
+        'user_type', 'is_email_verified', 'is_phone_verified',  # 👈 shtu
+        'is_guest', 'is_banned', 'is_active', 'language', 'profile_visibility',
     ]
     search_fields = ['email', 'username', 'full_name', 'phone', 'referral_code']
     ordering = ['-created_at']
@@ -37,9 +38,25 @@ class UserAdmin(BaseUserAdmin):
         ('Tipi & Statusi', {
             'fields': (
                 'user_type', 'is_active', 'is_staff', 'is_superuser',
-                'is_email_verified', 'email_verification_token',
                 'language', 'profile_visibility',
             )
+        }),
+        # 👇 Seksion i ri për verifikimin
+        ('Verifikimi i Email', {
+            'fields': (
+                'is_email_verified',
+                'email_verification_code',
+                'email_verification_code_sent_at',
+            ),
+            'classes': ('collapse',)
+        }),
+        ('Verifikimi i Telefonit', {
+            'fields': (
+                'is_phone_verified',
+                'phone_verification_code',
+                'phone_verification_code_sent_at',
+            ),
+            'classes': ('collapse',)
         }),
         ('Guest', {
             'fields': ('is_guest', 'guest_expires_at'),
@@ -73,21 +90,20 @@ class UserAdmin(BaseUserAdmin):
         }),
     )
 
-    actions = ['ban_users', 'unban_users', 'verify_email', 'reset_username_cooldown']
+    actions = [
+        'ban_users', 'unban_users',
+        'verify_email', 'verify_phone',  # 👈 shtu verify_phone
+        'reset_username_cooldown'
+    ]
 
     # ── Custom display methods ──────────────────────────────────────────
 
     def username_change_status(self, obj):
-        """Tregon sa ditë kanë mbetur për ndryshim username."""
         if not obj.username_changed_at:
-            return format_html(
-                '<span style="color: green;">✔ Mund të ndryshohet</span>'
-            )
+            return format_html('<span style="color: green;">✔ Mund të ndryshohet</span>')
         days_since = (timezone.now() - obj.username_changed_at).days
         if days_since >= 30:
-            return format_html(
-                '<span style="color: green;">✔ Mund të ndryshohet</span>'
-            )
+            return format_html('<span style="color: green;">✔ Mund të ndryshohet</span>')
         remaining = 30 - days_since
         return format_html(
             '<span style="color: orange;">⏳ {} ditë të mbetura</span>',
@@ -102,7 +118,6 @@ class UserAdmin(BaseUserAdmin):
 
     @admin.action(description='🚫 Blloko përdoruesit e zgjedhur')
     def ban_users(self, request, queryset):
-        # Mos blloko superuserët
         protected = queryset.filter(is_superuser=True).count()
         updated = queryset.exclude(is_superuser=True).update(is_banned=True)
         msg = f'{updated} përdorues u bllokuan.'
@@ -119,9 +134,19 @@ class UserAdmin(BaseUserAdmin):
     def verify_email(self, request, queryset):
         updated = queryset.update(
             is_email_verified=True,
-            email_verification_token=None
+            email_verification_code=None,       # 👈 pastro kodin
+            email_verification_code_sent_at=None,
         )
         self.message_user(request, f'{updated} email u verifikuan.')
+
+    @admin.action(description='📱 Verifiko telefon për të zgjedhurit')  # 👈 i ri
+    def verify_phone(self, request, queryset):
+        updated = queryset.update(
+            is_phone_verified=True,
+            phone_verification_code=None,
+            phone_verification_code_sent_at=None,
+        )
+        self.message_user(request, f'{updated} numra telefoni u verifikuan.')
 
     @admin.action(description='🔄 Reseto kufizimin e username (30 ditë)')
     def reset_username_cooldown(self, request, queryset):
