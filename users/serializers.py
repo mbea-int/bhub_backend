@@ -191,8 +191,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'email', 'username', 'full_name', 'phone', 'bio',
             'profile_image', 'user_type', 'referral_code', 'language',
-            'profile_visibility', 'is_email_verified', 'created_at',
-            'total_referrals', 'total_posts', 'average_rating',
+            'profile_visibility', 'is_email_verified', 'is_phone_verified',
+            'created_at', 'total_referrals', 'total_posts', 'average_rating',
             'total_saved', 'can_make_inquiry'
         ]
         read_only_fields = [

@@ -342,3 +342,13 @@ cloudinary.config(
     api_secret="YOUR_API_SECRET",
     secure=True
 )
+
+# Brevo (Sendinblue) config
+BREVO_API_KEY = 'xkeysib-YOUR-API-KEY-HERE'
+BREVO_SENDER_EMAIL = 'noreply@nyja.app'
+BREVO_SENDER_NAME = 'NYJA'
+
+# Verification settings
+EMAIL_VERIFICATION_CODE_LENGTH = 6
+EMAIL_VERIFICATION_CODE_EXPIRY_MINUTES = 15
+PHONE_VERIFICATION_CODE_EXPIRY_MINUTES = 5

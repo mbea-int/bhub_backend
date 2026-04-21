@@ -81,8 +81,15 @@ class User(AbstractUser):
     is_guest = models.BooleanField(default=False)
     guest_expires_at = models.DateTimeField(blank=True, null=True)
 
+    # Email verification
+    email_verification_code = models.CharField(max_length=6, blank=True, null=True)
+    email_verification_code_sent_at = models.DateTimeField(blank=True, null=True)
     is_email_verified = models.BooleanField(default=False)
-    email_verification_token = models.CharField(max_length=100, blank=True, null=True)
+
+    # Phone verification
+    phone_verification_code = models.CharField(max_length=6, blank=True, null=True)
+    phone_verification_code_sent_at = models.DateTimeField(blank=True, null=True)
+    is_phone_verified = models.BooleanField(default=False)
 
     is_banned = models.BooleanField(default=False)
     ban_reason = models.TextField(blank=True, null=True)
@@ -175,6 +182,33 @@ class User(AbstractUser):
             code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
             if not User.objects.filter(referral_code=code).exists():
                 return code
+
+    def generate_verification_code(self):
+        """Generate 6-digit code"""
+        import random
+        return ''.join([str(random.randint(0, 9)) for _ in range(6)])
+
+    def is_email_code_valid(self):
+        """Check if email verification code hasn't expired"""
+        if not self.email_verification_code_sent_at:
+            return False
+        from django.utils import timezone
+        from django.conf import settings
+        expiry = self.email_verification_code_sent_at + timezone.timedelta(
+            minutes=settings.EMAIL_VERIFICATION_CODE_EXPIRY_MINUTES
+        )
+        return timezone.now() < expiry
+
+    def is_phone_code_valid(self):
+        """Check if phone verification code hasn't expired"""
+        if not self.phone_verification_code_sent_at:
+            return False
+        from django.utils import timezone
+        from django.conf import settings
+        expiry = self.phone_verification_code_sent_at + timezone.timedelta(
+            minutes=settings.PHONE_VERIFICATION_CODE_EXPIRY_MINUTES
+        )
+        return timezone.now() < expiry
 
     @classmethod
     def cleanup_expired_guests(cls):
