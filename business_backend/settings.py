@@ -2,8 +2,6 @@ import os
 from pathlib import Path
 from datetime import timedelta
 from decouple import config
-import cloudinary
-import cloudinary.uploader
 import cloudinary.api
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -344,9 +342,9 @@ cloudinary.config(
 )
 
 # Brevo (Sendinblue) config
-BREVO_API_KEY = 'xkeysib-YOUR-API-KEY-HERE'
-BREVO_SENDER_EMAIL = 'noreply@nyja.app'
-BREVO_SENDER_NAME = 'NYJA'
+BREVO_API_KEY = config('BREVO_API_KEY')
+BREVO_SENDER_EMAIL = config('BREVO_SENDER_EMAIL', default='noreply@nyja.app')
+BREVO_SENDER_NAME = config('BREVO_SENDER_NAME', default='NYJA')
 
 # Verification settings
 EMAIL_VERIFICATION_CODE_LENGTH = 6
