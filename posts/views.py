@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from django_ratelimit.decorators import ratelimit
 from django.utils.decorators import method_decorator
-from django.db.models import Count
+from django.db.models import Count, Q
 
 from .models import Post, PostLike, SavedPost, ProductCategory
 from .serializers import (
@@ -37,8 +37,10 @@ class ProductCategoryViewSet(viewsets.ModelViewSet):
         if self.request.query_params.get('active_only') == 'true':
             queryset = queryset.filter(is_active=True)
 
-        # Annotate with posts count
-        queryset = queryset.annotate(posts_count=Count('posts'))
+        # Përdor emër tjetër për annotation
+        queryset = queryset.annotate(
+            active_posts_count=Count('posts', filter=Q(posts__is_available=True))
+        )
 
         return queryset
 

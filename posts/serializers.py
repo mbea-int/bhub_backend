@@ -6,7 +6,8 @@ from businesses.serializers import BusinessListSerializer, BusinessCategorySeria
 
 class ProductCategorySerializer(serializers.ModelSerializer):
     """Serializer for product categories"""
-    posts_count = serializers.IntegerField(read_only=True)
+    # Përdor SerializerMethodField për fleksibilitet
+    posts_count = serializers.SerializerMethodField()
 
     class Meta:
         model = ProductCategory
@@ -17,6 +18,11 @@ class ProductCategorySerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'slug', 'created_at', 'updated_at', 'posts_count']
 
+    def get_posts_count(self, obj):
+        # Kontrollo nëse ka annotation, përndryshe përdor property
+        if hasattr(obj, 'active_posts_count'):
+            return obj.active_posts_count
+        return obj.posts_count  # Fallback to property
 
 class ProductCategoryCreateSerializer(serializers.ModelSerializer):
     """Serializer for creating product categories"""
