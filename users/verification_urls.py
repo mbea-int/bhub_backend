@@ -10,10 +10,10 @@ urlpatterns = [
     path('verify-email/',
          verification_views.verify_email_code,
          name='verify-email'),
-    path('send-phone-verification/',
-         verification_views.send_phone_verification,
-         name='send-phone-verification'),
     path('verify-phone/',
          verification_views.verify_phone,
          name='verify-phone'),
+    path('verification-status/',
+         verification_views.verification_status,
+         name='verification-status'),
 ]

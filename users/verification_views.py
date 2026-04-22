@@ -5,9 +5,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from django.utils import timezone
 from django.conf import settings
-from django_ratelimit.decorators import ratelimit
-from .models import User
-from services.email_service import brevo_email_service
+from core.services.email_service import EmailService
 import logging
 
 logger = logging.getLogger(__name__)
@@ -15,7 +13,6 @@ logger = logging.getLogger(__name__)
 
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
-@ratelimit(key='user', rate='3/10m', method='POST')
 def send_email_verification(request):
     """Send verification code to user's email"""
     user = request.user
@@ -32,7 +29,7 @@ def send_email_verification(request):
             status=status.HTTP_400_BAD_REQUEST
         )
 
-    # Check cooldown (don't send too frequently)
+    # Cooldown check - 60 sekonda mes dërgimeve
     if user.email_verification_code_sent_at:
         time_since = timezone.now() - user.email_verification_code_sent_at
         if time_since.total_seconds() < 60:
@@ -54,21 +51,27 @@ def send_email_verification(request):
         'email_verification_code_sent_at'
     ])
 
-    # Send email
-    success = brevo_email_service.send_verification_code(
+    # Send email via Django SMTP (Brevo)
+    success = EmailService.send_verification_code(
         to_email=user.email,
         code=code,
         user_name=user.full_name,
     )
 
     if success:
-        logger.info(f"Verification email sent to {user.email}")
         return Response({
             'detail': 'Kodi i verifikimit u dërgua te email-i juaj.',
             'email': _mask_email(user.email),
             'expires_in_minutes': settings.EMAIL_VERIFICATION_CODE_EXPIRY_MINUTES,
         })
     else:
+        # Fshi kodin nëse dërgimi dështoi
+        user.email_verification_code = None
+        user.email_verification_code_sent_at = None
+        user.save(update_fields=[
+            'email_verification_code',
+            'email_verification_code_sent_at'
+        ])
         return Response(
             {'detail': 'Gabim gjatë dërgimit të email-it. Provoni përsëri.'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -77,7 +80,6 @@ def send_email_verification(request):
 
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
-@ratelimit(key='user', rate='5/10m', method='POST')
 def verify_email_code(request):
     """Verify the email verification code"""
     user = request.user
@@ -89,12 +91,25 @@ def verify_email_code(request):
             status=status.HTTP_400_BAD_REQUEST
         )
 
+    if len(code) != 6 or not code.isdigit():
+        return Response(
+            {'detail': 'Kodi duhet të jetë 6 shifra.'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    if user.is_email_verified:
+        return Response(
+            {'detail': 'Email-i është verifikuar tashmë.'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
     if not user.email_verification_code:
         return Response(
             {'detail': 'Nuk ka kod aktiv. Dërgoni një kod të ri.'},
             status=status.HTTP_400_BAD_REQUEST
         )
 
+    # Check expiry
     if not user.is_email_code_valid():
         user.email_verification_code = None
         user.save(update_fields=['email_verification_code'])
@@ -103,13 +118,14 @@ def verify_email_code(request):
             status=status.HTTP_400_BAD_REQUEST
         )
 
+    # Check code
     if user.email_verification_code != code:
         return Response(
             {'detail': 'Kodi nuk është i saktë.'},
             status=status.HTTP_400_BAD_REQUEST
         )
 
-    # Success - verify email
+    # ✅ Success
     user.is_email_verified = True
     user.email_verification_code = None
     user.email_verification_code_sent_at = None
@@ -119,7 +135,7 @@ def verify_email_code(request):
         'email_verification_code_sent_at',
     ])
 
-    logger.info(f"Email verified for user {user.email}")
+    logger.info(f"✅ Email verified for user {user.email}")
 
     return Response({
         'detail': 'Email-i u verifikua me sukses!',
@@ -127,23 +143,25 @@ def verify_email_code(request):
     })
 
 
-@api_view(['POST'])
+@api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
-def send_phone_verification(request):
-    """
-    Send phone verification code.
-    For now, this is a placeholder - Firebase Phone Auth handles this on client side.
-    """
+def verification_status(request):
+    """Get current verification status"""
+    user = request.user
     return Response({
-        'detail': 'Verifikimi i telefonit bëhet përmes Firebase.',
-        'method': 'firebase_phone_auth',
+        'email': user.email,
+        'is_email_verified': user.is_email_verified,
+        'phone': user.phone,
+        'is_phone_verified': getattr(user, 'is_phone_verified', False),
+        'has_email': bool(user.email),
+        'has_phone': bool(user.phone),
     })
 
 
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
 def verify_phone(request):
-    """Mark phone as verified (called after Firebase verification succeeds)"""
+    """Mark phone as verified after Firebase verification"""
     user = request.user
     firebase_token = request.data.get('firebase_id_token')
 
@@ -153,10 +171,24 @@ def verify_phone(request):
             status=status.HTTP_400_BAD_REQUEST
         )
 
-    # TODO: Verify Firebase token server-side
-    # For MVP, trust the client
+    if not user.phone:
+        return Response(
+            {'detail': 'Nuk keni numër telefoni të regjistruar.'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # TODO Faza 2: Verify Firebase token server-side
+    # import firebase_admin
+    # from firebase_admin import auth as firebase_auth
+    # decoded = firebase_auth.verify_id_token(firebase_token)
+    # phone_from_firebase = decoded.get('phone_number')
+    # if phone_from_firebase != user.phone:
+    #     return Response({'detail': 'Phone mismatch'}, status=400)
+
     user.is_phone_verified = True
     user.save(update_fields=['is_phone_verified'])
+
+    logger.info(f"✅ Phone verified for user {user.phone}")
 
     return Response({
         'detail': 'Telefoni u verifikua me sukses!',
@@ -165,9 +197,9 @@ def verify_phone(request):
 
 
 def _mask_email(email: str) -> str:
-    """Mask email for display: t***@gmail.com"""
+    """t***r@gmail.com"""
     if not email or '@' not in email:
-        return email
+        return email or ''
     local, domain = email.split('@', 1)
     if len(local) <= 2:
         masked = local[0] + '***'
