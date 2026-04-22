@@ -25,7 +25,7 @@ if DEBUG and not ON_PYTHONANYWHERE:
         '10.218.234.148',
         '10.213.7.148',
         '10.90.56.45',
-        '2c19-31-22-48-65.ngrok-free.app',
+        '7d22-109-234-233-6.ngrok-free.app',
         'nyja.pythonanywhere.com'
     ]
 else:
@@ -220,7 +220,7 @@ if DEBUG and NGROK_URL:
         'http://10.218.234.148:8000',
         'http://10.213.7.148:8000',
         'https://nyja.pythonanywhere.com',
-        'https://2c19-31-22-48-65.ngrok-free.app',
+        'https://7d22-109-234-233-6.ngrok-free.app',
         NGROK_URL
     ]
 else:
