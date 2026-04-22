@@ -161,13 +161,22 @@ def verification_status(request):
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
 def verify_phone(request):
-    """Mark phone as verified after Firebase verification"""
-    user = request.user
-    firebase_token = request.data.get('firebase_id_token')
+    """
+    Verify phone number via Firebase ID Token.
 
-    if not firebase_token:
+    Rrjedha:
+    1. Flutter → Firebase Phone Auth → merr SMS → verifikon kodin
+    2. Flutter merr Firebase ID Token
+    3. Flutter dërgon ID Token këtu
+    4. Django verifikon token-in me Firebase Admin SDK
+    5. Django shënon numrin si të verifikuar
+    """
+    user = request.user
+    firebase_id_token = request.data.get('firebase_id_token')
+
+    if not firebase_id_token:
         return Response(
-            {'detail': 'Firebase token mungon.'},
+            {'detail': 'Firebase ID token mungon.'},
             status=status.HTTP_400_BAD_REQUEST
         )
 
@@ -177,23 +186,123 @@ def verify_phone(request):
             status=status.HTTP_400_BAD_REQUEST
         )
 
-    # TODO Faza 2: Verify Firebase token server-side
-    # import firebase_admin
-    # from firebase_admin import auth as firebase_auth
-    # decoded = firebase_auth.verify_id_token(firebase_token)
-    # phone_from_firebase = decoded.get('phone_number')
-    # if phone_from_firebase != user.phone:
-    #     return Response({'detail': 'Phone mismatch'}, status=400)
+    if user.is_phone_verified:
+        return Response({
+            'detail': 'Telefoni është verifikuar tashmë.',
+            'is_phone_verified': True,
+        })
 
-    user.is_phone_verified = True
-    user.save(update_fields=['is_phone_verified'])
+    try:
+        from firebase_admin import auth as firebase_auth
 
-    logger.info(f"✅ Phone verified for user {user.phone}")
+        # Verifiko Firebase ID Token
+        decoded_token = firebase_auth.verify_id_token(firebase_id_token)
 
-    return Response({
-        'detail': 'Telefoni u verifikua me sukses!',
-        'is_phone_verified': True,
-    })
+        firebase_phone = decoded_token.get('phone_number')
+        firebase_uid = decoded_token.get('uid')
+
+        logger.info(
+            f"📱 Firebase token decoded - "
+            f"phone: {firebase_phone}, uid: {firebase_uid}"
+        )
+
+        if not firebase_phone:
+            return Response(
+                {'detail': 'Firebase token nuk përmban numër telefoni.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # ── Krahaso numrin e telefonit ──
+        # Pastro formatimin për krahasim
+        def clean_phone(p):
+            """Hiq hapësirat, vizat, kllapat"""
+            return (p or '').replace(' ', '').replace('-', '') \
+                .replace('(', '').replace(')', '')
+
+        user_phone_clean = clean_phone(user.phone)
+        firebase_phone_clean = clean_phone(firebase_phone)
+
+        # Kontrollo përputhjen
+        # Lejon: +355691234567 == 0691234567 (hiq 0 dhe shto prefix)
+        phones_match = False
+
+        if user_phone_clean == firebase_phone_clean:
+            phones_match = True
+        elif firebase_phone_clean.endswith(
+                user_phone_clean.lstrip('0')
+        ):
+            phones_match = True
+        elif user_phone_clean.endswith(
+                firebase_phone_clean.lstrip('+').lstrip('0')
+        ):
+            phones_match = True
+
+        if not phones_match:
+            logger.warning(
+                f"⚠️ Phone mismatch - "
+                f"user: {user_phone_clean}, "
+                f"firebase: {firebase_phone_clean}"
+            )
+            return Response(
+                {
+                    'detail': (
+                        'Numri i verifikuar nuk përputhet me numrin '
+                        'në profilin tuaj.'
+                    ),
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # ✅ Verifikimi i suksesshëm
+        user.is_phone_verified = True
+        # Ruaj numrin në formatin ndërkombëtar nga Firebase
+        user.phone = firebase_phone
+        user.save(update_fields=['is_phone_verified', 'phone'])
+
+        logger.info(
+            f"✅ Phone verified for user {user.id}: {firebase_phone}"
+        )
+
+        return Response({
+            'detail': 'Telefoni u verifikua me sukses!',
+            'is_phone_verified': True,
+            'phone': firebase_phone,
+        })
+
+    except ImportError:
+        logger.error("❌ firebase_admin not installed")
+        return Response(
+            {'detail': 'Firebase nuk është konfiguruar në server.'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+    except firebase_auth.InvalidIdTokenError:
+        logger.warning("❌ Invalid Firebase token")
+        return Response(
+            {'detail': 'Token i pavlefshëm. Provoni përsëri.'},
+            status=status.HTTP_401_UNAUTHORIZED
+        )
+
+    except firebase_auth.ExpiredIdTokenError:
+        logger.warning("❌ Expired Firebase token")
+        return Response(
+            {'detail': 'Token ka skaduar. Provoni përsëri.'},
+            status=status.HTTP_401_UNAUTHORIZED
+        )
+
+    except firebase_auth.CertificateFetchError:
+        logger.error("❌ Firebase certificate fetch error")
+        return Response(
+            {'detail': 'Gabim komunikimi me Firebase. Provoni përsëri.'},
+            status=status.HTTP_502_BAD_GATEWAY
+        )
+
+    except Exception as e:
+        logger.error(f"❌ Phone verification error: {str(e)}")
+        return Response(
+            {'detail': f'Gabim gjatë verifikimit: {str(e)}'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 
 def _mask_email(email: str) -> str:

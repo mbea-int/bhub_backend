@@ -83,6 +83,9 @@ instance/
 # Sphinx documentation
 docs/_build/
 
+# Firebase
+firebase-service-account.json
+
 # PyBuilder
 .pybuilder/
 target/
