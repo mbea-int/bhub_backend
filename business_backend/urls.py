@@ -41,7 +41,8 @@ urlpatterns = [
     # path('api/auth/login/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/auth/login/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/auth/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
-    path('api/auth/', include('users.verification_urls')),
+    path('api/auth/', include('users.verification_urls_brevo_api')),
+    # path('api/auth/', include('users.verification_urls')),
     # API Routes
     path('api/', include(router.urls)),
 

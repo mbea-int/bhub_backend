@@ -342,17 +342,18 @@ cloudinary.config(
 )
 
 # Brevo (Sendinblue) config
-# BREVO_API_KEY = config('BREVO_API_KEY')
-# BREVO_SENDER_EMAIL = config('BREVO_SENDER_EMAIL', default='noreply@nyja.app')
-# BREVO_SENDER_NAME = config('BREVO_SENDER_NAME', default='NYJA')
+BREVO_API_KEY = config('BREVO_API_KEY')
+BREVO_SENDER_EMAIL = config('BREVO_SENDER_EMAIL', default='nyja.2026.nyja@gmail.com')
+BREVO_SENDER_NAME = config('BREVO_SENDER_NAME', default='NYJA')
 
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = config('EMAIL_HOST', default='smtp-relay.brevo.com')
-EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
-EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
-EMAIL_HOST_USER = config('EMAIL_HOST_USER')
-EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD')
-DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='NYJA <noreply@nyja.app>')
+if DEBUG:
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+    EMAIL_HOST = config('EMAIL_HOST', default='smtp-relay.brevo.com')
+    EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
+    EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
+    EMAIL_HOST_USER = config('EMAIL_HOST_USER')
+    EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD')
+    DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='NYJA <noreply@nyja.app>')
 
 # Verification settings
 # EMAIL_VERIFICATION_CODE_LENGTH = 6
