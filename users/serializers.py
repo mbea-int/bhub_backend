@@ -226,6 +226,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
 class UserUpdateSerializer(serializers.ModelSerializer):
     profile_image = CloudinaryImageField(required=False, allow_null=True)
     email = serializers.EmailField(required=False, allow_null=True, allow_blank=True)
+    phone = serializers.CharField(required=False, allow_null=True, allow_blank=True)
 
     class Meta:
         model = User
@@ -235,17 +236,16 @@ class UserUpdateSerializer(serializers.ModelSerializer):
         ]
 
     def validate_email(self, value):
-        if not value or not value.strip():
-            return None
+        # ✅ String bosh = fshi email-in
+        if value is None or (isinstance(value, str) and not value.strip()):
+            return ''  # Kthe string bosh (do ta trajtojmë në update)
 
         value = value.strip().lower()
         user = self.instance
 
-        # Nëse nuk ka ndryshuar
         if user and user.email and user.email.lower() == value:
             return value
 
-        # Kontrollo unikalitetin
         if User.objects.filter(email__iexact=value).exclude(
             pk=user.pk if user else None
         ).exists():
@@ -290,23 +290,85 @@ class UserUpdateSerializer(serializers.ModelSerializer):
         return value
 
     def validate_phone(self, value):
-        if not value or not value.strip():
-            return None
+        # ✅ String bosh = fshi phone
+        if value is None or (isinstance(value, str) and not value.strip()):
+            return ''  # Kthe string bosh (do ta trajtojmë në update)
+
         normalized = normalize_phone(value)
         validate_phone_number(value)
         return normalized
 
+    def validate(self, attrs):
+        """
+        Validim i përgjithshëm:
+        - Business users duhet të kenë të paktën email OSE phone
+        """
+        user = self.instance
+        if user and user.user_type == 'business':
+            # Merr vlerat finale (pas update)
+            final_email = attrs.get('email', user.email)
+            final_phone = attrs.get('phone', user.phone)
+
+            # String bosh = fshirje
+            if final_email == '':
+                final_email = None
+            if final_phone == '':
+                final_phone = None
+
+            if not final_email and not final_phone:
+                raise serializers.ValidationError({
+                    'email': 'Bizneset duhet të kenë të paktën email ose numër telefoni.',
+                    'phone': 'Bizneset duhet të kenë të paktën email ose numër telefoni.',
+                })
+
+        return attrs
+
     def update(self, instance, validated_data):
-        # Nëse username po ndryshon, ruaj timestamp-in
+        # ─── Username change tracking ───
         new_username = validated_data.get('username')
         if new_username and new_username != instance.username:
             from django.utils import timezone
             validated_data['username_changed_at'] = timezone.now()
 
-        # Nëse email po ndryshon, flag-o si jo-verified
-        new_email = validated_data.get('email')
-        if new_email and new_email != instance.email:
-            validated_data['is_email_verified'] = False
+        # ─── Email change handling ───
+        if 'email' in validated_data:
+            new_email = validated_data['email']
+
+            if new_email == '':
+                # ✅ FSHI email-in
+                validated_data['email'] = None
+                validated_data['is_email_verified'] = False
+                validated_data['email_verification_code'] = None
+                validated_data['email_verification_code_sent_at'] = None
+                logger.info(f"Email removed for user {instance.id}")
+
+            elif new_email and new_email != instance.email:
+                # Email ndryshoi - flag-o si jo-verified
+                validated_data['is_email_verified'] = False
+                validated_data['email_verification_code'] = None
+                validated_data['email_verification_code_sent_at'] = None
+                logger.info(
+                    f"Email changed for user {instance.id}: "
+                    f"{instance.email} → {new_email}"
+                )
+
+        # ─── Phone change handling ───
+        if 'phone' in validated_data:
+            new_phone = validated_data['phone']
+
+            if new_phone == '':
+                # ✅ FSHI phone
+                validated_data['phone'] = None
+                validated_data['is_phone_verified'] = False
+                logger.info(f"Phone removed for user {instance.id}")
+
+            elif new_phone and new_phone != instance.phone:
+                # Phone ndryshoi - flag-o si jo-verified
+                validated_data['is_phone_verified'] = False
+                logger.info(
+                    f"Phone changed for user {instance.id}: "
+                    f"{instance.phone} → {new_phone}"
+                )
 
         return super().update(instance, validated_data)
 
