@@ -7,7 +7,8 @@ from django.utils import timezone
 from django.conf import settings
 from django_ratelimit.decorators import ratelimit
 from .models import User
-from services.email_service_brevo_api import brevo_email_service
+# from services.email_service_brevo_api import brevo_email_service
+from services.email_service_brevo_http import brevo_email_service
 import logging
 
 logger = logging.getLogger(__name__)
