@@ -209,7 +209,7 @@ SIMPLE_JWT = {
 
 AUTHENTICATION_BACKENDS = [
     'users.backends.EmailOrUsernameBackend',  # I ri
-    'django.contrib.auth.backends.ModelBackend',  # Fallback
+    # 'django.contrib.auth.backends.ModelBackend',  # Fallback
 ]
 # CORS Settings
 if DEBUG and NGROK_URL:

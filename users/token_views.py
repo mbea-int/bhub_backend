@@ -1,18 +1,20 @@
+# users/token_views.py - VERSIONI FINAL
+
 from rest_framework import serializers
+from rest_framework.exceptions import AuthenticationFailed
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
 from django.contrib.auth import authenticate
-from django.utils.translation import gettext_lazy as _
+from .models import User
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
-    """
-    Pranon 'identifier' (email ose username) në vend të vetëm email.
-    """
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Hiq fushën email, shto identifier
         self.fields.pop(self.username_field, None)
         self.fields['identifier'] = serializers.CharField(
             write_only=True,
@@ -24,30 +26,28 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         password = attrs.get('password', '')
 
         if not identifier:
-            raise serializers.ValidationError(
-                {'identifier': _('Vendosni email ose username.')}
-            )
+            raise AuthenticationFailed('Vendosni email ose username.')
 
+        # ── Gjej user ──
         user = authenticate(
             request=self.context.get('request'),
             username=identifier,
-            password=password
+            password=password,
         )
 
-        if not user:
-            raise serializers.ValidationError(
-                {'detail': _('Email/username ose fjalëkalimi i pavlefshëm.')}
+        if user is None:
+            logger.warning(f"Login failed for: {identifier}")
+            raise AuthenticationFailed(
+                'Email/username ose fjalëkalimi i pavlefshëm.'
             )
 
         if not user.is_active:
-            raise serializers.ValidationError(
-                {'detail': _('Llogaria është joaktive.')}
-            )
+            raise AuthenticationFailed('Llogaria është joaktive.')
 
         if user.is_banned:
             reason = f': {user.ban_reason}' if user.ban_reason else ''
-            raise serializers.ValidationError(
-                {'detail': _('Llogaria juaj është bllokuar') + reason}
+            raise AuthenticationFailed(
+                f'Llogaria juaj është bllokuar{reason}'
             )
 
         refresh = self.get_token(user)
